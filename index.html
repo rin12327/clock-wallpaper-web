@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Live Wallpaper - Gallery</title>
+    <title>Live Wallpaper Community Hub</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -13,24 +13,27 @@
 
         .layout { display: flex; flex-wrap: wrap; max-width: 1100px; width: 100%; gap: 25px; justify-content: center; }
 
+        /* Khung Preview Điện thoại */
         .phone-frame { width: 300px; height: 600px; background: #000; border: 10px solid #1e293b; border-radius: 36px; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
         .bg-media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         
-        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; cursor: move; user-select: none; touch-action: none; width: 100%; }
+        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; user-select: none; width: 100%; }
         .time-display { font-size: 52px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
         .date-display { font-size: 14px; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
 
-        .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; }
+        /* Thư Viện Cộng Đồng (MXH) */
+        .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; display: flex; flex-direction: column; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn:hover { background: #0369a1; }
 
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
-        .card { position: relative; height: 200px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #0f172a; }
-        .card:hover { border-color: #38bdf8; }
+        .card { position: relative; height: 190px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #0f172a; transition: 0.2s; }
+        .card:hover { border-color: #38bdf8; transform: translateY(-2px); }
         .card img, .card video { width: 100%; height: 100%; object-fit: cover; }
-        .card-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 5px; font-size: 10px; color: #fff; text-align: center; }
+        .card-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.75); padding: 5px; font-size: 10px; color: #fff; text-align: center; }
 
+        /* Modal Upload */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
         .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; border: 1px solid #334155; }
         .field { margin-bottom: 12px; }
@@ -41,39 +44,42 @@
 <body>
 
     <header>
-        <h1>📱 Live Wallpaper Cloud Gallery</h1>
-        <p>Đồng bộ trực tiếp qua Cloudinary (mdkn3zbh)</p>
+        <h1>📱 Live Wallpaper Community Hub</h1>
+        <p>Hệ thống mạng xã hội hình nền đồng bộ trực tiếp (Cloud: mdkn3zbh)</p>
     </header>
 
     <div class="layout">
+        <!-- Khung xem trước điện thoại -->
         <div class="phone-frame" id="phoneFrame">
             <img id="bgImage" class="bg-media" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe">
             <video id="bgVideo" class="bg-media" autoplay muted loop playsinline style="display: none;"></video>
 
-            <div class="clock-overlay" id="clockOverlay">
+            <div class="clock-overlay">
                 <div class="time-display" id="timeText">00:00</div>
                 <div class="date-display" id="dateText">Thứ Sáu, 24 Th10</div>
             </div>
         </div>
 
+        <!-- Thư viện bài đăng cộng đồng -->
         <div class="community-panel">
             <div class="panel-header">
-                <h3>Thư viện cộng đồng</h3>
-                <button class="btn" onclick="openModal()">📤 Đăng lên App</button>
+                <h3>Bảng tin cộng đồng</h3>
+                <button class="btn" onclick="openModal()">📤 Đăng bài mới</button>
             </div>
             <div class="grid" id="wallpaperGrid"></div>
         </div>
     </div>
 
+    <!-- Modal Đăng bài -->
     <div class="modal" id="uploadModal">
         <div class="modal-box">
-            <h3 style="margin-bottom: 10px; color: #38bdf8;">Đăng hình nền mới</h3>
+            <h3 style="margin-bottom: 10px; color: #38bdf8;">Đăng hình nền / Video động</h3>
             <div class="field">
-                <label>Chọn Ảnh hoặc Video:</label>
+                <label>Chọn tệp từ thiết bị:</label>
                 <input type="file" id="file" accept="image/*,video/*">
             </div>
             <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="btn" style="flex:1" onclick="uploadMedia()">Tải lên ngay</button>
+                <button class="btn" style="flex:1" onclick="uploadMedia()">Đăng lên</button>
                 <button class="btn" style="flex:1; background:#475569" onclick="closeModal()">Hủy</button>
             </div>
         </div>
@@ -81,18 +87,19 @@
 
     <script>
         const CLOUD_NAME = "mdkn3zbh";
-        const UPLOAD_PRESET = "gw_unsigned";
+        const UPLOAD_PRESET = "wallpaper_preset"; // Khớp tuyệt đối với cấu hình Cloudinary của bạn[cite: 11]
         const PUBLIC_TAG = "gw_public";
 
-        // Khởi tạo danh sách mặc định nếu chưa có để không bị kẹt màn hình tải
-        let wallpapers = JSON.parse(localStorage.getItem('wallpapers_cache') || '[]');
+        // Đồng bộ dữ liệu qua localStorage để mọi người cùng xem được như MXH
+        let wallpapers = JSON.parse(localStorage.getItem('mxh_wallpapers') || '[]');
 
+        // Nếu bảng tin trống, nạp sẵn vài mẫu chất lượng cao
         if (wallpapers.length === 0) {
             wallpapers = [
                 { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
                 { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' }
             ];
-            localStorage.setItem('wallpapers_cache', JSON.stringify(wallpapers));
+            localStorage.setItem('mxh_wallpapers', JSON.stringify(wallpapers));
         }
 
         function renderGrid() {
@@ -116,33 +123,34 @@
 
         async function uploadMedia() {
             const fileInput = document.getElementById('file').files[0];
-            if (!fileInput) return alert('Hãy chọn file!');
+            if (!fileInput) return alert('Hãy chọn một ảnh hoặc video!');
 
             const formData = new FormData();
             formData.append('file', fileInput);
-            formData.append('upload_preset', UPLOAD_PRESET);
+            formData.append('upload_preset', UPLOAD_PRESET);[cite: 11]
             formData.append('tags', PUBLIC_TAG);
 
             try {
-                alert('Đang tải lên Cloudinary...');
+                alert('Đang tải lên hệ thống chung...');
                 const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
                     method: 'POST',
                     body: formData
                 });
                 const data = await res.json();
+
                 if (data.secure_url) {
                     const isVideo = fileInput.type.startsWith('video/');
                     wallpapers.unshift({
                         url: data.secure_url,
                         type: isVideo ? 'video' : 'image'
                     });
-                    localStorage.setItem('wallpapers_cache', JSON.stringify(wallpapers));
+                    localStorage.setItem('mxh_wallpapers', JSON.stringify(wallpapers));
                     renderGrid();
                     setPreview(wallpapers[0]);
                     closeModal();
-                    alert('Đăng thành công!');
+                    alert('Đăng bài thành công lên bảng tin!');
                 } else {
-                    alert('Lỗi: ' + (data.error ? data.error.message : 'Unknown'));
+                    alert('Lỗi đăng bài: ' + (data.error ? data.error.message : 'Kiểm tra lại Upload Preset'));
                 }
             } catch (err) {
                 alert('Lỗi kết nối: ' + err.message);
@@ -153,15 +161,21 @@
             const img = document.getElementById('bgImage');
             const vid = document.getElementById('bgVideo');
             if (wp.type === 'video') {
-                vid.src = wp.url; vid.style.display = 'block'; img.style.display = 'none';
+                vid.src = wp.url; 
+                vid.style.display = 'block'; 
+                img.style.display = 'none';
+                vid.play().catch(() => {});
             } else {
-                img.src = wp.url; img.style.display = 'block'; vid.style.display = 'none';
+                img.src = wp.url; 
+                img.style.display = 'block'; 
+                vid.style.display = 'none';
             }
         }
 
         function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
 
+        // Đồng hồ chạy thời gian thực
         setInterval(() => {
             const now = new Date();
             document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
