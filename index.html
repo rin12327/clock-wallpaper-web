@@ -3,84 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Live Wallpaper - Online Community Feed</title>
+    <title>Clock Wallpaper - Live Community Sync</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        header { text-align: center; margin-bottom: 25px; }
-        h1 { font-size: 26px; color: #38bdf8; }
-        p { color: #94a3b8; font-size: 14px; margin-top: 5px; }
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { color: #38bdf8; font-size: 24px; }
+        p { color: #94a3b8; font-size: 13px; }
 
-        .main-layout { display: flex; flex-wrap: wrap; max-width: 1200px; width: 100%; gap: 30px; justify-content: center; }
+        .layout { display: flex; flex-wrap: wrap; max-width: 1100px; width: 100%; gap: 25px; justify-content: center; }
 
-        /* Màn hình điện thoại giả lập preview */
-        .preview-section { flex: 1; min-width: 300px; max-width: 340px; display: flex; flex-direction: column; align-items: center; }
+        /* Khung Preview Điện Thoại */
         .phone-frame { width: 300px; height: 600px; background: #000; border: 10px solid #1e293b; border-radius: 36px; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
         .bg-media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         
-        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; cursor: move; user-select: none; touch-action: none; padding: 10px; width: 100%; }
+        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; cursor: move; user-select: none; touch-action: none; width: 100%; }
         .time-display { font-size: 52px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
-        .date-display { font-size: 14px; font-weight: 500; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
+        .date-display { font-size: 14px; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
 
-        /* Khung kho hình nền cộng đồng */
-        .community-section { flex: 2; min-width: 340px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .upload-btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .upload-btn:hover { background: #0369a1; }
+        /* Bảng Thư Viện Cộng Đồng Sync Realtime */
+        .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn:hover { background: #0369a1; }
 
-        /* Grid danh sách hình nền online */
-        .wallpaper-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; max-height: 500px; overflow-y: auto; padding-right: 5px; }
-        .wallpaper-card { position: relative; width: 100%; height: 220px; border-radius: 12px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
-        .wallpaper-card:hover { border-color: #38bdf8; transform: scale(1.02); }
-        .wallpaper-card img, .wallpaper-card video { width: 100%; height: 100%; object-fit: cover; }
-        .card-info { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 8px; font-size: 11px; color: #fff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto; }
+        .card { position: relative; height: 200px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; }
+        .card:hover { border-color: #38bdf8; }
+        .card img, .card video { width: 100%; height: 100%; object-fit: cover; }
+        .card-author { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 5px; font-size: 10px; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 
-        /* Modal Đăng ảnh/video mới */
+        /* Modal Upload */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
-        .modal-content { background: #1e293b; padding: 25px; border-radius: 16px; width: 340px; border: 1px solid #334155; }
-        .modal-content h3 { margin-bottom: 15px; color: #38bdf8; }
-        .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; font-size: 12px; margin-bottom: 4px; color: #cbd5e1; }
-        .form-group input { width: 100%; padding: 8px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; }
+        .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; }
+        .field { margin-bottom: 12px; }
+        .field label { font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px; }
+        .field input { width: 100%; padding: 8px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 6px; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🌐 Live Wallpaper Community</h1>
-        <p>Khám phá & đăng tải hình nền động/tĩnh từ cộng đồng người dùng</p>
+        <h1>📱 Live Wallpaper Sync Studio</h1>
+        <p>Đồng bộ hình nền Real-time giữa Web & App Android</p>
     </header>
 
-    <div class="main-layout">
-        <!-- Xem trước hình nền chọn -->
-        <div class="preview-section">
-            <div class="phone-frame" id="phoneFrame">
-                <img id="bgImage" class="bg-media" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe" alt="Wallpaper">
-                <video id="bgVideo" class="bg-media" autoplay muted loop playsinline style="display: none;"></video>
+    <div class="layout">
+        <!-- Preview Điện thoại -->
+        <div class="phone-frame" id="phoneFrame">
+            <img id="bgImage" class="bg-media" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe">
+            <video id="bgVideo" class="bg-media" autoplay muted loop playsinline style="display: none;"></video>
 
-                <div class="clock-overlay" id="clockOverlay">
-                    <div class="time-display" id="timeText">00:00</div>
-                    <div class="date-display" id="dateText">Thứ Sáu, 24 Th10</div>
-                </div>
+            <div class="clock-overlay" id="clockOverlay">
+                <div class="time-display" id="timeText">00:00</div>
+                <div class="date-display" id="dateText">Thứ Sáu, 24 Th10</div>
             </div>
         </div>
 
-        <!-- Bảng danh sách hình nền Online -->
-        <div class="community-section">
-            <div class="section-header">
-                <h3>Thư viện Online</h3>
-                <button class="upload-btn" onclick="openUploadModal()">📤 Đăng hình nền</button>
+        <!-- Thư viện Online -->
+        <div class="community-panel">
+            <div class="panel-header">
+                <h3>Cộng đồng Online (<span id="count">0</span>)</h3>
+                <button class="btn" onclick="openModal()">📤 Đăng bài mới</button>
             </div>
+            <div class="grid" id="wallpaperGrid"></div>
+        </div>
+    </div>
 
-            <div class="wallpaper-grid" id="wallpaperGrid">
-                <!-- Danh sách hình nền động/tĩnh sẽ hiển thị ở đây -->
+    <!-- Modal Form -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-box">
+            <h3 style="margin-bottom: 10px; color: #38bdf8;">Tải hình nền lên</h3>
+            <div class="field">
+                <label>Tên của bạn:</label>
+                <input type="text" id="author" placeholder="Ví dụ: Ronaldo">
+            </div>
+            <div class="field">
+                <label>Chọn Ảnh hoặc Video:</label>
+                <input type="file" id="file" accept="image/*,video/*">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn" style="flex:1" onclick="uploadMedia()">Đăng</button>
+                <button class="btn" style="flex:1; background:#475569" onclick="closeModal()">Hủy</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Upload Cloudinary -->
-    <div class="modal" id="uploadModal">
-        <div class="modal-content">
-            <h3>Đăng hình nền lên Cộng đồng</h3>
-            <div class="form-group">
-                <label>Tên tác giả:</label>
+    <script>
+        // 1. Cấu hình Cloudinary
+        const CLOUD_NAME = "c-fc9792d5a747baea711a7d2e705d9e";
+        const UPLOAD_PRESET = "unsigned_preset"; // Đảm bảo đã tạo Unsigned Preset trong Settings Cloudinary
+
+        // 2. Cấu hình Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", // Điền API Key Firebase của bạn
+            projectId: "clock-wallpaper-app", // Điền Project ID Firebase của bạn
+            firestoreDatabaseUrl: "https://clock-wallpaper-app.firebaseio.com"
+        };
+        
+        // Khởi tạo Firebase Firestore
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // 3. Lắng nghe Realtime từ Database (Web + Android dùng chung)
+        db.collection("wallpapers").orderBy("createdAt", "desc")
+            .onSnapshot(snapshot => {
+                const grid = document.getElementById('wallpaperGrid');
+                grid.innerHTML = '';
+                document.getElementById('count').innerText = snapshot.docs.length;
+
+                snapshot.docs.forEach((doc, index) => {
+                    const data = doc.data();
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.onclick = () => setPreview(data);
+
+                    if (data.type === 'video') {
+                        card.innerHTML = `<video src="${data.url}" muted loop playsinline></video><div class="card-author">🎥 ${data.author}</div>`;
+                    } else {
+                        card.innerHTML = `<img src="${data.url}"><div class="card-author">🖼️ ${data.author}</div>`;
+                    }
+                    grid.appendChild(card);
+
+                    if (index === 0) setPreview(data); // Đặt hình nền mới nhất làm preview
+                });
+            });
+
+        // 4. Upload Cloudinary & Lưu Firebase
+        async function uploadMedia() {
+            const author = document.getElementById('author').value || 'Ronaldo';
+            const fileInput = document.getElementById('file').files[0];
+
+            if (!fileInput) return alert('Hãy chọn file ảnh/video!');
+
+            const formData = new FormData();
+            formData.append('file', fileInput);
+            formData.append('upload_preset', UPLOAD_PRESET);
+
+            try {
+                alert('Đang tải file lên đám mây...');
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.secure_url) {
+                    const isVideo = fileInput.type.startsWith('video/');
+                    // Lưu dữ liệu vào Firestore
+                    await db.collection("wallpapers").add({
+                        url: data.secure_url,
+                        type: isVideo ? 'video' : 'image',
+                        author: author,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    closeModal();
+                    alert('Đăng thành công! Tất cả Web và App Android sẽ thấy bài này.');
+                }
+            } catch (err) {
+                alert('Lỗi: ' + err.message);
+            }
+        }
+
+        function setPreview(wp) {
+            const img = document.getElementById('bgImage');
+            const vid = document.getElementById('bgVideo');
+            if (wp.type === 'video') {
+                vid.src = wp.url; vid.style.display = 'block'; img.style.display = 'none';
+            } else {
+                img.src = wp.url; img.style.display = 'block'; vid.style.display = 'none';
+            }
+        }
+
+        function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
+
+        // Đồng hồ realtime
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        }, 1000);
+    </script>
+</body>
+</html>
