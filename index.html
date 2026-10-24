@@ -13,7 +13,6 @@
 
         .layout { display: flex; flex-wrap: wrap; max-width: 1100px; width: 100%; gap: 25px; justify-content: center; }
 
-        /* Khung Preview Điện thoại */
         .phone-frame { width: 300px; height: 600px; background: #000; border: 10px solid #1e293b; border-radius: 36px; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
         .bg-media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         
@@ -21,7 +20,6 @@
         .time-display { font-size: 52px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
         .date-display { font-size: 14px; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
 
-        /* Thư Viện Cộng Đồng (MXH) */
         .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; display: flex; flex-direction: column; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -33,7 +31,6 @@
         .card img, .card video { width: 100%; height: 100%; object-fit: cover; }
         .card-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.75); padding: 5px; font-size: 10px; color: #fff; text-align: center; }
 
-        /* Modal Upload */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
         .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; border: 1px solid #334155; }
         .field { margin-bottom: 12px; }
@@ -45,11 +42,10 @@
 
     <header>
         <h1>📱 Live Wallpaper Community Hub</h1>
-        <p>Hệ thống mạng xã hội hình nền đồng bộ trực tiếp (Cloud: mdkn3zbh)</p>
+        <p>Hệ thống mạng xã hội hình nền (Cloud: mdkn3zbh)</p>
     </header>
 
     <div class="layout">
-        <!-- Khung xem trước điện thoại -->
         <div class="phone-frame" id="phoneFrame">
             <img id="bgImage" class="bg-media" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe">
             <video id="bgVideo" class="bg-media" autoplay muted loop playsinline style="display: none;"></video>
@@ -60,7 +56,6 @@
             </div>
         </div>
 
-        <!-- Thư viện bài đăng cộng đồng -->
         <div class="community-panel">
             <div class="panel-header">
                 <h3>Bảng tin cộng đồng</h3>
@@ -70,7 +65,6 @@
         </div>
     </div>
 
-    <!-- Modal Đăng bài -->
     <div class="modal" id="uploadModal">
         <div class="modal-box">
             <h3 style="margin-bottom: 10px; color: #38bdf8;">Đăng hình nền / Video động</h3>
@@ -87,20 +81,23 @@
 
     <script>
         const CLOUD_NAME = "mdkn3zbh";
-        const UPLOAD_PRESET = "wallpaper_preset"; // Khớp tuyệt đối với cấu hình Cloudinary của bạn[cite: 11]
+        const UPLOAD_PRESET = "wallpaper_preset";[cite: 11]
         const PUBLIC_TAG = "gw_public";
 
-        // Đồng bộ dữ liệu qua localStorage để mọi người cùng xem được như MXH
-        let wallpapers = JSON.parse(localStorage.getItem('mxh_wallpapers') || '[]');
+        // Ép buộc nạp dữ liệu mẫu ngay lập tức nếu chưa có
+        let wallpapers = [
+            { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
+            { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' },
+            { type: 'image', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401' }
+        ];
 
-        // Nếu bảng tin trống, nạp sẵn vài mẫu chất lượng cao
-        if (wallpapers.length === 0) {
-            wallpapers = [
-                { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
-                { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' }
-            ];
-            localStorage.setItem('mxh_wallpapers', JSON.stringify(wallpapers));
-        }
+        // Lấy thêm dữ liệu từ localStorage nếu có người dùng từng đăng
+        try {
+            const saved = JSON.parse(localStorage.getItem('mxh_wallpapers') || '[]');
+            if (saved.length > 0) {
+                wallpapers = [...saved, ...wallpapers];
+            }
+        } catch(e) {}
 
         function renderGrid() {
             const grid = document.getElementById('wallpaperGrid');
@@ -175,12 +172,12 @@
         function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
 
-        // Đồng hồ chạy thời gian thực
         setInterval(() => {
             const now = new Date();
             document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         }, 1000);
 
+        // Chạy ngay lập tức khi load xong trang
         renderGrid();
     </script>
 </body>
