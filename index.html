@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Live Wallpaper - Fast Gallery</title>
+    <title>Clock Live Wallpaper - Gallery</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -42,7 +42,7 @@
 
     <header>
         <h1>📱 Live Wallpaper Cloud Gallery</h1>
-        <p>Đồng bộ trực tiếp qua Cloudinary (mdkn3zbh)[cite: 9]</p>
+        <p>Đồng bộ trực tiếp qua Cloudinary (mdkn3zbh)</p>
     </header>
 
     <div class="layout">
@@ -61,9 +61,7 @@
                 <h3>Thư viện cộng đồng</h3>
                 <button class="btn" onclick="openModal()">📤 Đăng lên App</button>
             </div>
-            <div class="grid" id="wallpaperGrid">
-                <p style="color:#94a3b8; font-size:13px; padding:10px;">Đang tải...</p>
-            </div>
+            <div class="grid" id="wallpaperGrid"></div>
         </div>
     </div>
 
@@ -82,21 +80,24 @@
     </div>
 
     <script>
-        const CLOUD_NAME = "mdkn3zbh";[cite: 9]
-        const UPLOAD_PRESET = "gw_unsigned";[cite: 9]
-        const PUBLIC_TAG = "gw_public";[cite: 9]
+        const CLOUD_NAME = "mdkn3zbh";
+        const UPLOAD_PRESET = "gw_unsigned";
+        const PUBLIC_TAG = "gw_public";
 
-        // Lưu trữ danh sách bài đăng cục bộ kết hợp bộ nhớ đệm để load lập tức không bị treo
+        // Khởi tạo danh sách mặc định nếu chưa có để không bị kẹt màn hình tải
         let wallpapers = JSON.parse(localStorage.getItem('wallpapers_cache') || '[]');
+
+        if (wallpapers.length === 0) {
+            wallpapers = [
+                { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
+                { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' }
+            ];
+            localStorage.setItem('wallpapers_cache', JSON.stringify(wallpapers));
+        }
 
         function renderGrid() {
             const grid = document.getElementById('wallpaperGrid');
             grid.innerHTML = '';
-
-            if (wallpapers.length === 0) {
-                grid.innerHTML = `<p style="color:#94a3b8; font-size:13px; padding:10px;">Chưa có hình nền nào. Hãy bấm đăng để thêm mới!</p>`;
-                return;
-            }
 
             wallpapers.forEach((item, index) => {
                 const card = document.createElement('div');
@@ -119,12 +120,12 @@
 
             const formData = new FormData();
             formData.append('file', fileInput);
-            formData.append('upload_preset', UPLOAD_PRESET);[cite: 9]
-            formData.append('tags', PUBLIC_TAG);[cite: 9]
+            formData.append('upload_preset', UPLOAD_PRESET);
+            formData.append('tags', PUBLIC_TAG);
 
             try {
                 alert('Đang tải lên Cloudinary...');
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {[cite: 9]
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -166,7 +167,6 @@
             document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         }, 1000);
 
-        // Chạy ngay lập tức không chờ đợi mạng chậm
         renderGrid();
     </script>
 </body>
