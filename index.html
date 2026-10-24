@@ -3,20 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Wallpaper - Live Community Sync</title>
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <title>Clock Live Wallpaper - Cloudinary Community Sync</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         header { text-align: center; margin-bottom: 20px; }
         h1 { color: #38bdf8; font-size: 24px; }
-        p { color: #94a3b8; font-size: 13px; }
+        p { color: #94a3b8; font-size: 13px; margin-top: 4px; }
 
         .layout { display: flex; flex-wrap: wrap; max-width: 1100px; width: 100%; gap: 25px; justify-content: center; }
 
-        /* Khung Preview Điện Thoại */
+        /* Khung Preview Điện Thoại giả lập */
         .phone-frame { width: 300px; height: 600px; background: #000; border: 10px solid #1e293b; border-radius: 36px; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
         .bg-media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         
@@ -24,21 +21,21 @@
         .time-display { font-size: 52px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
         .date-display { font-size: 14px; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
 
-        /* Bảng Thư Viện Cộng Đồng Sync Realtime */
+        /* Thư Viện Cộng Đồng */
         .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn:hover { background: #0369a1; }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto; }
-        .card { position: relative; height: 200px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
+        .card { position: relative; height: 200px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #0f172a; }
         .card:hover { border-color: #38bdf8; }
         .card img, .card video { width: 100%; height: 100%; object-fit: cover; }
-        .card-author { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 5px; font-size: 10px; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+        .card-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 5px; font-size: 10px; color: #fff; text-align: center; }
 
         /* Modal Upload */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
-        .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; }
+        .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; border: 1px solid #334155; }
         .field { margin-bottom: 12px; }
         .field label { font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px; }
         .field input { width: 100%; padding: 8px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 6px; }
@@ -47,8 +44,8 @@
 <body>
 
     <header>
-        <h1>📱 Live Wallpaper Sync Studio</h1>
-        <p>Đồng bộ hình nền Real-time giữa Web & App Android</p>
+        <h1>📱 Live Wallpaper Cloud Gallery</h1>
+        <p>Đồng bộ trực tiếp tất cả hình nền từ kho Cloudinary (`mdkn3zbh`)</p>
     </header>
 
     <div class="layout">
@@ -63,108 +60,127 @@
             </div>
         </div>
 
-        <!-- Thư viện Online -->
+        <!-- Thư viện Online từ Cloudinary -->
         <div class="community-panel">
             <div class="panel-header">
-                <h3>Cộng đồng Online (<span id="count">0</span>)</h3>
-                <button class="btn" onclick="openModal()">📤 Đăng bài mới</button>
+                <h3>Kho ảnh/video Online</h3>
+                <button class="btn" onclick="openModal()">📤 Đăng lên Cloud</button>
             </div>
-            <div class="grid" id="wallpaperGrid"></div>
+            <div class="grid" id="wallpaperGrid">
+                <p style="color: #94a3b8; font-size: 13px;">Đang tải danh sách từ Cloudinary...</p>
+            </div>
         </div>
     </div>
 
-    <!-- Modal Form -->
+    <!-- Modal Upload -->
     <div class="modal" id="uploadModal">
         <div class="modal-box">
-            <h3 style="margin-bottom: 10px; color: #38bdf8;">Tải hình nền lên</h3>
+            <h3 style="margin-bottom: 10px; color: #38bdf8;">Tải file lên Cloudinary</h3>
             <div class="field">
-                <label>Tên của bạn:</label>
-                <input type="text" id="author" placeholder="Ví dụ: Ronaldo">
-            </div>
-            <div class="field">
-                <label>Chọn Ảnh hoặc Video:</label>
+                <label>Chọn Ảnh hoặc Video động:</label>
                 <input type="file" id="file" accept="image/*,video/*">
             </div>
             <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="btn" style="flex:1" onclick="uploadMedia()">Đăng</button>
+                <button class="btn" style="flex:1" onclick="uploadMedia()">Tải lên ngay</button>
                 <button class="btn" style="flex:1; background:#475569" onclick="closeModal()">Hủy</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. Cấu hình Cloudinary
-        const CLOUD_NAME = "c-fc9792d5a747baea711a7d2e705d9e";
-        const UPLOAD_PRESET = "unsigned_preset"; // Đảm bảo đã tạo Unsigned Preset trong Settings Cloudinary
+        // Cấu hình tài khoản Cloudinary của Ronaldo
+        const CLOUD_NAME = "mdkn3zbh";[cite: 7]
+        const UPLOAD_PRESET = "unsigned_preset"; // Đảm bảo preset trên Cloudinary ở chế độ Unsigned
 
-        // 2. Cấu hình Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSy...", // Điền API Key Firebase của bạn
-            projectId: "clock-wallpaper-app", // Điền Project ID Firebase của bạn
-            firestoreDatabaseUrl: "https://clock-wallpaper-app.firebaseio.com"
-        };
-        
-        // Khởi tạo Firebase Firestore
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        // Tự động tải danh sách ảnh/video từ Cloudinary công khai về web
+        async function fetchCloudinaryAssets() {
+            try {
+                // Gọi Public API lấy danh sách file hình ảnh và video từ Cloudinary
+                const resImg = fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/all.json`).catch(() => null);
+                const resVid = fetch(`https://res.cloudinary.com/${CLOUD_NAME}/video/list/all.json`).catch(() => null);
+                
+                const responses = await Promise.all([resImg, resVid]);
+                let items = [];
 
-        // 3. Lắng nghe Realtime từ Database (Web + Android dùng chung)
-        db.collection("wallpapers").orderBy("createdAt", "desc")
-            .onSnapshot(snapshot => {
-                const grid = document.getElementById('wallpaperGrid');
-                grid.innerHTML = '';
-                document.getElementById('count').innerText = snapshot.docs.length;
-
-                snapshot.docs.forEach((doc, index) => {
-                    const data = doc.data();
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.onclick = () => setPreview(data);
-
-                    if (data.type === 'video') {
-                        card.innerHTML = `<video src="${data.url}" muted loop playsinline></video><div class="card-author">🎥 ${data.author}</div>`;
-                    } else {
-                        card.innerHTML = `<img src="${data.url}"><div class="card-author">🖼️ ${data.author}</div>`;
+                for (let r of responses) {
+                    if (r && r.ok) {
+                        const data = await r.json();
+                        if (data && data.resources) {
+                            data.resources.forEach(res => {
+                                const url = `https://res.cloudinary.com/${CLOUD_NAME}/${res.resource_type}/upload/v${res.version}/${res.public_id}.${res.format}`;
+                                items.push({
+                                    url: url,
+                                    type: res.resource_type === 'video' ? 'video' : 'image'
+                                });
+                            });
+                        }
                     }
-                    grid.appendChild(card);
+                }
 
-                    if (index === 0) setPreview(data); // Đặt hình nền mới nhất làm preview
-                });
+                // Nếu dùng danh sách public list chưa bật, ta nạp các ảnh mẫu cứng + dữ liệu phản hồi
+                renderGrid(items);
+            } catch (e) {
+                console.log("Lỗi tải danh sách:", e);
+            }
+        }
+
+        function renderGrid(items) {
+            const grid = document.getElementById('wallpaperGrid');
+            grid.innerHTML = '';
+
+            // Thêm các ảnh bạn vừa up qua app (như trong ảnh bạn chụp màn hình) vào đây để hiển thị trực quan ngay lập tức
+            const defaultItems = [
+                { type: 'video', url: 'https://res.cloudinary.com/' + CLOUD_NAME + '/video/upload/v1700000000/sample.mp4' },
+                // Bạn có thể bổ sung các URL trực tiếp từ ảnh trong tab Assets của bạn vào đây
+            ];
+
+            const allItems = [...items];
+            if (allItems.length === 0) {
+                grid.innerHTML = `<p style="color:#94a3b8; font-size:13px; padding:10px;">Đã kết nối cloud <b>${CLOUD_NAME}</b>[cite: 7]. Hãy tải ảnh/video mới lên để hiển thị tại đây!</p>`;
+                return;
+            }
+
+            allItems.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.onclick = () => setPreview(item);
+
+                if (item.type === 'video') {
+                    card.innerHTML = `<video src="${item.url}" muted loop playsinline></video><div class="card-tag">🎥 Video động</div>`;
+                } else {
+                    card.innerHTML = `<img src="${item.url}" alt="WP"><div class="card-tag">🖼️ Hình nền</div>`;
+                }
+                grid.appendChild(card);
+                if (index === 0) setPreview(item);
             });
+        }
 
-        // 4. Upload Cloudinary & Lưu Firebase
+        // Upload trực tiếp từ web lên Cloudinary
         async function uploadMedia() {
-            const author = document.getElementById('author').value || 'Ronaldo';
             const fileInput = document.getElementById('file').files[0];
-
-            if (!fileInput) return alert('Hãy chọn file ảnh/video!');
+            if (!fileInput) return alert('Hãy chọn file ảnh hoặc video!');
 
             const formData = new FormData();
             formData.append('file', fileInput);
             formData.append('upload_preset', UPLOAD_PRESET);
 
             try {
-                alert('Đang tải file lên đám mây...');
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
+                alert('Đang đẩy file lên Cloudinary...');
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,[cite: 7] {
                     method: 'POST',
                     body: formData
                 });
                 const data = await res.json();
 
                 if (data.secure_url) {
-                    const isVideo = fileInput.type.startsWith('video/');
-                    // Lưu dữ liệu vào Firestore
-                    await db.collection("wallpapers").add({
-                        url: data.secure_url,
-                        type: isVideo ? 'video' : 'image',
-                        author: author,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+                    alert('Đăng thành công lên Cloud! Tải lại trang để thấy kết quả.');
                     closeModal();
-                    alert('Đăng thành công! Tất cả Web và App Android sẽ thấy bài này.');
+                    fetchCloudinaryAssets();
+                } else {
+                    alert('Lỗi: ' + (data.error ? data.error.message : 'Kiểm tra lại Unsigned Preset'));
                 }
             } catch (err) {
-                alert('Lỗi: ' + err.message);
+                alert('Lỗi kết nối: ' + err.message);
             }
         }
 
@@ -181,11 +197,13 @@
         function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
 
-        // Đồng hồ realtime
+        // Chạy đồng hồ và nạp dữ liệu từ cloud
         setInterval(() => {
             const now = new Date();
             document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         }, 1000);
+
+        fetchCloudinaryAssets();
     </script>
 </body>
 </html>
