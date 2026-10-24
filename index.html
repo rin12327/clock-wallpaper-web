@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clock Live Wallpaper - Cloudinary Community Sync</title>
+    <title>Clock Live Wallpaper - Cloud Gallery</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -45,7 +45,7 @@
 
     <header>
         <h1>📱 Live Wallpaper Cloud Gallery</h1>
-        <p>Đồng bộ trực tiếp tất cả hình nền từ kho Cloudinary (`mdkn3zbh`)</p>
+        <p>Kho lưu trữ Cloudinary (`mdkn3zbh`)[cite: 7]</p>
     </header>
 
     <div class="layout">
@@ -60,15 +60,13 @@
             </div>
         </div>
 
-        <!-- Thư viện Online từ Cloudinary -->
+        <!-- Thư viện Online -->
         <div class="community-panel">
             <div class="panel-header">
-                <h3>Kho ảnh/video Online</h3>
+                <h3>Danh sách hình nền</h3>
                 <button class="btn" onclick="openModal()">📤 Đăng lên Cloud</button>
             </div>
-            <div class="grid" id="wallpaperGrid">
-                <p style="color: #94a3b8; font-size: 13px;">Đang tải danh sách từ Cloudinary...</p>
-            </div>
+            <div class="grid" id="wallpaperGrid"></div>
         </div>
     </div>
 
@@ -88,59 +86,30 @@
     </div>
 
     <script>
-        // Cấu hình tài khoản Cloudinary của Ronaldo
         const CLOUD_NAME = "mdkn3zbh";[cite: 7]
-        const UPLOAD_PRESET = "unsigned_preset"; // Đảm bảo preset trên Cloudinary ở chế độ Unsigned
+        const UPLOAD_PRESET = "unsigned_preset"; 
 
-        // Tự động tải danh sách ảnh/video từ Cloudinary công khai về web
-        async function fetchCloudinaryAssets() {
-            try {
-                // Gọi Public API lấy danh sách file hình ảnh và video từ Cloudinary
-                const resImg = fetch(`https://res.cloudinary.com/${CLOUD_NAME}/image/list/all.json`).catch(() => null);
-                const resVid = fetch(`https://res.cloudinary.com/${CLOUD_NAME}/video/list/all.json`).catch(() => null);
-                
-                const responses = await Promise.all([resImg, resVid]);
-                let items = [];
+        // Danh sách lưu trữ tạm cục bộ (hoặc bạn có thể thêm các link ảnh trực tiếp từ Cloudinary của bạn vào đây)
+        let wallpapers = JSON.parse(localStorage.getItem('my_wallpapers') || '[]');
 
-                for (let r of responses) {
-                    if (r && r.ok) {
-                        const data = await r.json();
-                        if (data && data.resources) {
-                            data.resources.forEach(res => {
-                                const url = `https://res.cloudinary.com/${CLOUD_NAME}/${res.resource_type}/upload/v${res.version}/${res.public_id}.${res.format}`;
-                                items.push({
-                                    url: url,
-                                    type: res.resource_type === 'video' ? 'video' : 'image'
-                                });
-                            });
-                        }
-                    }
-                }
-
-                // Nếu dùng danh sách public list chưa bật, ta nạp các ảnh mẫu cứng + dữ liệu phản hồi
-                renderGrid(items);
-            } catch (e) {
-                console.log("Lỗi tải danh sách:", e);
-            }
+        // Nếu chưa có, nạp sẵn vài mẫu để test giao diện
+        if (wallpapers.length === 0) {
+            wallpapers = [
+                { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
+                { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' }
+            ];
         }
 
-        function renderGrid(items) {
+        function renderGrid() {
             const grid = document.getElementById('wallpaperGrid');
             grid.innerHTML = '';
 
-            // Thêm các ảnh bạn vừa up qua app (như trong ảnh bạn chụp màn hình) vào đây để hiển thị trực quan ngay lập tức
-            const defaultItems = [
-                { type: 'video', url: 'https://res.cloudinary.com/' + CLOUD_NAME + '/video/upload/v1700000000/sample.mp4' },
-                // Bạn có thể bổ sung các URL trực tiếp từ ảnh trong tab Assets của bạn vào đây
-            ];
-
-            const allItems = [...items];
-            if (allItems.length === 0) {
-                grid.innerHTML = `<p style="color:#94a3b8; font-size:13px; padding:10px;">Đã kết nối cloud <b>${CLOUD_NAME}</b>[cite: 7]. Hãy tải ảnh/video mới lên để hiển thị tại đây!</p>`;
+            if (wallpapers.length === 0) {
+                grid.innerHTML = `<p style="color:#94a3b8; font-size:13px; padding:10px;">Chưa có hình nền nào. Hãy bấm đăng để thêm mới!</p>`;
                 return;
             }
 
-            allItems.forEach((item, index) => {
+            wallpapers.forEach((item, index) => {
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.onclick = () => setPreview(item);
@@ -155,7 +124,6 @@
             });
         }
 
-        // Upload trực tiếp từ web lên Cloudinary
         async function uploadMedia() {
             const fileInput = document.getElementById('file').files[0];
             if (!fileInput) return alert('Hãy chọn file ảnh hoặc video!');
@@ -173,9 +141,16 @@
                 const data = await res.json();
 
                 if (data.secure_url) {
-                    alert('Đăng thành công lên Cloud! Tải lại trang để thấy kết quả.');
+                    const isVideo = fileInput.type.startsWith('video/');
+                    wallpapers.unshift({
+                        type: isVideo ? 'video' : 'image',
+                        url: data.secure_url
+                    });
+                    localStorage.setItem('my_wallpapers', JSON.stringify(wallpapers));
+                    renderGrid();
+                    setPreview(wallpapers[0]);
                     closeModal();
-                    fetchCloudinaryAssets();
+                    alert('Đăng thành công lên Cloud!');
                 } else {
                     alert('Lỗi: ' + (data.error ? data.error.message : 'Kiểm tra lại Unsigned Preset'));
                 }
@@ -197,13 +172,13 @@
         function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
         function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
 
-        // Chạy đồng hồ và nạp dữ liệu từ cloud
+        // Đồng hồ thời gian thực
         setInterval(() => {
             const now = new Date();
             document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         }, 1000);
 
-        fetchCloudinaryAssets();
+        renderGrid();
     </script>
 </body>
 </html>
