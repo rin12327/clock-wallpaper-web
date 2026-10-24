@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clock Wallpaper - Live Wallpaper & Clock Studio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow-x: hidden; }
+        .container { display: flex; flex-wrap: wrap; max-width: 1200px; width: 100%; gap: 40px; padding: 20px; align-items: center; justify-content: center; }
+        .phone-frame { width: 320px; height: 640px; background: #000; border: 12px solid #334155; border-radius: 40px; position: relative; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
+        .wallpaper-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; cursor: grab; user-select: none; width: 100%; }
+        .time-display { font-size: 64px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 15px rgba(0,0,0,0.8); }
+        .date-display { font-size: 16px; font-weight: 500; color: #e2e8f0; text-shadow: 0 2px 10px rgba(0,0,0,0.8); margin-top: 5px; }
+        .control-panel { background: #1e293b; padding: 30px; border-radius: 20px; width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; }
+        h1 { font-size: 24px; margin-bottom: 10px; color: #38bdf8; }
+        p.subtitle { font-size: 14px; color: #94a3b8; margin-bottom: 20px; }
+        .control-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #cbd5e1; }
+        input, select { width: 100%; padding: 10px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #fff; font-size: 14px; }
+        .btn-download { display: block; width: 100%; padding: 12px; background: #0284c7; color: white; text-align: center; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 20px; transition: 0.2s; }
+        .btn-download:hover { background: #0369a1; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Trình giả lập màn hình điện thoại -->
+        <div class="phone-frame" id="phoneFrame">
+            <img id="bgImage" class="wallpaper-canvas" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe" alt="Wallpaper">
+            <div class="clock-overlay" id="clockOverlay">
+                <div class="time-display" id="timeText">00:00</div>
+                <div class="date-display" id="dateText">Thứ Sáu, 24 Tháng 10</div>
+            </div>
+        </div>
+
+        <!-- Bảng điều khiển tùy chỉnh giống app -->
+        <div class="control-panel">
+            <h1>Clock Wallpaper Web</h1>
+            <p class="subtitle">Trải nghiệm tính năng tuỳ chỉnh màn hình chờ trực tiếp trên web.</p>
+            
+            <div class="control-group">
+                <label>Chọn hình nền mẫu:</label>
+                <select id="bgSelect" onchange="changeBg(this.value)">
+                    <option value="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe">Trừu tượng Neon</option>
+                    <option value="https://images.unsplash.com/photo-1507525428034-b723cf961d3e">Bãi biển hoàng hôn</option>
+                    <option value="https://images.unsplash.com/photo-1534447677768-be436bb09401">Đêm đầy sao</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Màu chữ đồng hồ:</label>
+                <input type="color" id="textColor" value="#ffffff" onchange="changeTextColor(this.value)">
+            </div>
+
+            <div class="control-group">
+                <label>Cỡ chữ đồng hồ:</label>
+                <input type="range" id="textSize" min="40" max="90" value="64" oninput="changeTextSize(this.value)">
+            </div>
+
+            <a href="#" class="btn-download" onclick="alert('Đang tải APK phiên bản mới nhất...')">📥 Tải App Android (APK)</a>
+        </div>
+    </div>
+
+    <script>
+        // Cập nhật đồng hồ thời gian thực
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('timeText').innerText = `${h}:${m}:${s}`;
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('dateText').innerText = now.toLocaleDateString('vi-VN', options);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Thay đổi hình nền
+        function changeBg(url) {
+            document.getElementById('bgImage').src = url;
+        }
+
+        // Đổi màu chữ
+        function changeTextColor(color) {
+            document.getElementById('timeText').style.color = color;
+            document.getElementById('dateText').style.color = color;
+        }
+
+        // Đổi cỡ chữ
+        function changeSize(size) {
+            document.getElementById('timeText').style.fontSize = size + 'px';
+        }
+        function changeTextSize(val) {
+            document.getElementById('timeText').style.fontSize = val + 'px';
+        }
+    </script>
+</body>
+</html>
