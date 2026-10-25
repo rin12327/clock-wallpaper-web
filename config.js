@@ -5,7 +5,7 @@ export const CONFIG = {
 
   // Đăng nhập Google (tùy chọn). Để trống thì ẩn nút đăng nhập, người dùng tự nhập tên hiển thị.
   // Dùng "OAuth client ID" loại Web, và thêm tên miền Vercel vào "Authorized JavaScript origins".
-  GOOGLE_CLIENT_ID: "",
+  GOOGLE_CLIENT_ID: "860319074735-90c0b1llrgg9m1o3prsjmpso78vije88.apps.googleusercontent.com",
 
   // Các tag này phải GIỐNG HỆT bên app Android để hai bên dùng chung dữ liệu
   PUBLIC_TAG: "gw_public",
