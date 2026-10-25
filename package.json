@@ -1,0 +1,6 @@
+{
+  "name": "clock-wallpaper-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live Wallpaper Community Hub - web tĩnh + hàm serverless dự phòng cho Vercel"
+}
