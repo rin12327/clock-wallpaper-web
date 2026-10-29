@@ -1,184 +1,58 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Wallpaper Community Hub</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        header { text-align: center; margin-bottom: 20px; }
-        h1 { color: #38bdf8; font-size: 24px; }
-        p { color: #94a3b8; font-size: 13px; margin-top: 4px; }
+# Live Wallpaper Community Hub
 
-        .layout { display: flex; flex-wrap: wrap; max-width: 1100px; width: 100%; gap: 25px; justify-content: center; }
+Web tĩnh (HTML + CSS + JS thuần, không cần build) dùng chung dữ liệu với app Android qua Cloudinary.
+Ảnh và ảnh động đăng từ điện thoại sẽ hiện ở đây, và ngược lại.
 
-        .phone-frame { width: 300px; height: 600px; background: #000; border: 10px solid #1e293b; border-radius: 36px; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }
-        .bg-media { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        
-        .clock-overlay { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); z-index: 2; text-align: center; user-select: none; width: 100%; }
-        .time-display { font-size: 52px; font-weight: 700; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); }
-        .date-display { font-size: 14px; color: #e2e8f0; text-shadow: 0 2px 8px rgba(0,0,0,0.9); margin-top: 4px; }
+## Cấu trúc
 
-        .community-panel { flex: 1; min-width: 320px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; display: flex; flex-direction: column; }
-        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .btn { padding: 8px 16px; background: #0284c7; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn:hover { background: #0369a1; }
+```
+index.html     giao diện: khung điện thoại + bảng cộng đồng
+style.css
+app.js         toàn bộ logic
+config.js      cấu hình (cloud name, upload preset, Google client ID)
+api/list.js    hàm serverless dự phòng (chỉ dùng nếu trình duyệt bị chặn CORS)
+vercel.json
+package.json
+```
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
-        .card { position: relative; height: 190px; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #0f172a; transition: 0.2s; }
-        .card:hover { border-color: #38bdf8; transform: translateY(-2px); }
-        .card img, .card video { width: 100%; height: 100%; object-fit: cover; }
-        .card-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.75); padding: 5px; font-size: 10px; color: #fff; text-align: center; }
+## 1. Cloudinary (làm một lần)
 
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
-        .modal-box { background: #1e293b; padding: 20px; border-radius: 12px; width: 320px; border: 1px solid #334155; }
-        .field { margin-bottom: 12px; }
-        .field label { font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px; }
-        .field input { width: 100%; padding: 8px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 6px; }
-    </style>
-</head>
-<body>
+1. **Settings → Upload → Upload presets → Add upload preset**
+   - Tên: `gw_unsigned`
+   - Signing mode: **Unsigned**
+2. **Settings → Security**: bỏ chặn **Resource list** (nếu đang tick "Restricted"). Không bỏ thì Khám phá không tải được danh sách.
+3. Nếu đổi tên preset hoặc cloud name, sửa trong `config.js` (và trong `Cloud.kt` của app).
 
-    <header>
-        <h1>📱 Live Wallpaper Community Hub</h1>
-        <p>Hệ thống mạng xã hội hình nền (Cloud: mdkn3zbh)</p>
-    </header>
+> Tuyệt đối **không** đưa API Secret vào `config.js` hay bất kỳ file nào trong repo.
 
-    <div class="layout">
-        <div class="phone-frame" id="phoneFrame">
-            <img id="bgImage" class="bg-media" src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe">
-            <video id="bgVideo" class="bg-media" autoplay muted loop playsinline style="display: none;"></video>
+## 2. Đưa lên Git rồi Vercel
 
-            <div class="clock-overlay">
-                <div class="time-display" id="timeText">00:00</div>
-                <div class="date-display" id="dateText">Thứ Sáu, 24 Th10</div>
-            </div>
-        </div>
+1. Vào repo GitHub → **Add file → Upload files**.
+2. Kéo thả toàn bộ file **và thư mục `api`** vào, ghi đè `index.html` cũ → **Commit changes**.
+3. Vercel đã nối với repo nên sẽ tự deploy. Nếu tạo project mới: **Import** repo, Framework Preset chọn **Other**, để trống Build Command và Output Directory.
+4. (Tùy chọn) Nếu muốn dùng cloud name khác mà không sửa code: thêm biến môi trường `CLOUDINARY_CLOUD_NAME` trong Vercel → Settings → Environment Variables (chỉ áp dụng cho `api/list.js`).
 
-        <div class="community-panel">
-            <div class="panel-header">
-                <h3>Bảng tin cộng đồng</h3>
-                <button class="btn" onclick="openModal()">📤 Đăng bài mới</button>
-            </div>
-            <div class="grid" id="wallpaperGrid"></div>
-        </div>
-    </div>
+Chạy thử trên máy: `npx serve` (hoặc `vercel dev`) trong thư mục này. Không mở trực tiếp bằng `file://` vì dùng ES module.
 
-    <div class="modal" id="uploadModal">
-        <div class="modal-box">
-            <h3 style="margin-bottom: 10px; color: #38bdf8;">Đăng hình nền / Video động</h3>
-            <div class="field">
-                <label>Chọn tệp từ thiết bị:</label>
-                <input type="file" id="file" accept="image/*,video/*">
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="btn" style="flex:1" onclick="uploadMedia()">Đăng lên</button>
-                <button class="btn" style="flex:1; background:#475569" onclick="closeModal()">Hủy</button>
-            </div>
-        </div>
-    </div>
+## 3. Đăng nhập Google (tùy chọn)
 
-    <script>
-        const CLOUD_NAME = "mdkn3zbh";
-        const UPLOAD_PRESET = "wallpaper_preset";[cite: 11]
-        const PUBLIC_TAG = "gw_public";
+1. Google Cloud Console → Credentials → **OAuth client ID** loại **Web** (có thể dùng lại client Web của app).
+2. **Authorized JavaScript origins**: thêm `https://<ten-mien-vercel-cua-ban>`.
+3. Dán client ID vào `GOOGLE_CLIENT_ID` trong `config.js`.
 
-        // Ép buộc nạp dữ liệu mẫu ngay lập tức nếu chưa có
-        let wallpapers = [
-            { type: 'image', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe' },
-            { type: 'image', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e' },
-            { type: 'image', url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401' }
-        ];
+Tên Google chỉ dùng để hiển thị là người đăng, chưa được xác minh ở phía máy chủ.
 
-        // Lấy thêm dữ liệu từ localStorage nếu có người dùng từng đăng
-        try {
-            const saved = JSON.parse(localStorage.getItem('mxh_wallpapers') || '[]');
-            if (saved.length > 0) {
-                wallpapers = [...saved, ...wallpapers];
-            }
-        } catch(e) {}
+## Cách hoạt động
 
-        function renderGrid() {
-            const grid = document.getElementById('wallpaperGrid');
-            grid.innerHTML = '';
+- **Áp dụng:** trên web, "Áp dụng" đặt bài vào khung điện thoại (có đồng hồ, kéo được, đổi kiểu chữ/màu/cỡ, bật tắt giây và ngày). Web **không** đổi được hình nền thật của điện thoại; hãy tải về hoặc dùng app Android.
+- **Bật/tắt màn hình (⏻):** thử hành vi trên điện thoại, ảnh động và âm thanh phát lại từ đầu mỗi lần bật.
+- **Đăng bài:** ảnh hoặc ảnh động (1–30 giây). Công khai/riêng tư, lặp lại, âm thanh. Ảnh có thể kèm âm thanh (tối đa 30 giây).
+- **Tiêu đề và tên người đăng** được mã hóa trong `public_id` (cùng định dạng với app), nên hai bên thấy giống nhau.
+- **Xóa / chuyển riêng tư:** vì không có API secret nên web gửi một "bia mộ" (tệp nhỏ gắn tag `gw_del` / `gw_priv`), Khám phá của mọi người sẽ ẩn bài đó. File gốc vẫn nằm trong Cloudinary, bạn tự xóa trong Media Library theo tag. Danh sách có thể trễ khoảng 1 phút do CDN.
+- **Báo cáo:** gửi tệp JSON gắn tag `gw_report`. Xem trong Media Library rồi xử lý.
+- **Mục "Của tôi"** lưu trong trình duyệt, nên web và app không chia sẻ mục này. Bài công khai thì ai cũng thấy ở Khám phá.
 
-            wallpapers.forEach((item, index) => {
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.onclick = () => setPreview(item);
+## Giới hạn cần biết
 
-                if (item.type === 'video') {
-                    card.innerHTML = `<video src="${item.url}" muted loop playsinline></video><div class="card-tag">🎥 Video động</div>`;
-                } else {
-                    card.innerHTML = `<img src="${item.url}"><div class="card-tag">🖼️ Hình nền</div>`;
-                }
-                grid.appendChild(card);
-                if (index === 0) setPreview(item);
-            });
-        }
-
-        async function uploadMedia() {
-            const fileInput = document.getElementById('file').files[0];
-            if (!fileInput) return alert('Hãy chọn một ảnh hoặc video!');
-
-            const formData = new FormData();
-            formData.append('file', fileInput);
-            formData.append('upload_preset', UPLOAD_PRESET);[cite: 11]
-            formData.append('tags', PUBLIC_TAG);
-
-            try {
-                alert('Đang tải lên hệ thống chung...');
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-
-                if (data.secure_url) {
-                    const isVideo = fileInput.type.startsWith('video/');
-                    wallpapers.unshift({
-                        url: data.secure_url,
-                        type: isVideo ? 'video' : 'image'
-                    });
-                    localStorage.setItem('mxh_wallpapers', JSON.stringify(wallpapers));
-                    renderGrid();
-                    setPreview(wallpapers[0]);
-                    closeModal();
-                    alert('Đăng bài thành công lên bảng tin!');
-                } else {
-                    alert('Lỗi đăng bài: ' + (data.error ? data.error.message : 'Kiểm tra lại Upload Preset'));
-                }
-            } catch (err) {
-                alert('Lỗi kết nối: ' + err.message);
-            }
-        }
-
-        function setPreview(wp) {
-            const img = document.getElementById('bgImage');
-            const vid = document.getElementById('bgVideo');
-            if (wp.type === 'video') {
-                vid.src = wp.url; 
-                vid.style.display = 'block'; 
-                img.style.display = 'none';
-                vid.play().catch(() => {});
-            } else {
-                img.src = wp.url; 
-                img.style.display = 'block'; 
-                vid.style.display = 'none';
-            }
-        }
-
-        function openModal() { document.getElementById('uploadModal').style.display = 'flex'; }
-        function closeModal() { document.getElementById('uploadModal').style.display = 'none'; }
-
-        setInterval(() => {
-            const now = new Date();
-            document.getElementById('timeText').innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        }, 1000);
-
-        // Chạy ngay lập tức khi load xong trang
-        renderGrid();
-    </script>
-</body>
-</html>
+- Không có kiểm tra chủ bài ở phía máy chủ: giao diện chỉ hiện nút xóa/riêng tư cho bài của mình, nhưng ai biết tên upload preset (nằm trong `config.js` và APK) đều có thể gửi bia mộ để ẩn bài người khác. Muốn chặn hẳn cần máy chủ riêng có xác thực.
+- Upload preset unsigned cho phép ai cũng đăng được tệp vào tài khoản Cloudinary. Nên giới hạn dung lượng/định dạng trong preset và theo dõi dung lượng.
