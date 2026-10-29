@@ -4,8 +4,10 @@ import { CONFIG } from "./config.js";
  *  Tiện ích
  * ===================================================================== */
 const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const store = {
   get(k, d) {
@@ -23,8 +25,8 @@ const store = {
 
 /** Bỏ dấu tiếng Việt + chữ thường: "anh dong" tìm ra "Ảnh động" */
 const foldVi = (s) => s.toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "").replace(/đ/g, "d");
-
 const fmtDate = (iso) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
+const two = (n) => String(n).padStart(2, "0");
 
 let toastTimer;
 function toast(msg) {
@@ -32,8 +34,70 @@ function toast(msg) {
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 3400);
+  toastTimer = setTimeout(() => (t.hidden = true), 3600);
 }
+
+/* =====================================================================
+ *  Mẫu thiết kế (đi kèm mỗi bài đăng, cùng định dạng với app Android)
+ * ===================================================================== */
+const CLOCK_STYLES = [
+  ["digital", "Điện tử LED (Digital)"],
+  ["neon_glow", "Neon phát sáng"],
+  ["cyberpunk", "Cyberpunk lỗi hình"],
+  ["retro_pixel", "Retro pixel cổ điển"],
+  ["bold", "Đậm mạnh mẽ (Bold)"],
+  ["serif", "Cổ điển (Serif)"],
+  ["serif_italic", "Serif nghiêng sang trọng"],
+  ["monospace", "Đơn không chân (Monospace)"],
+  ["cursive", "Thư pháp (Cursive)"],
+  ["casual", "Viết tay (Casual)"],
+  ["outline", "Chữ rỗng viền (Outline)"],
+  ["gradient", "Chuyển màu (Gradient)"],
+  ["shadow3d", "Nổi khối 3D"],
+  ["elegant", "Thanh mảnh thanh lịch"],
+];
+const STYLE_KEYS = CLOCK_STYLES.map((s) => s[0]);
+
+const defaultDesign = () => ({
+  clock: { style: "digital", color: "#ffffff", scale: 1, sx: 1, sy: 1, rot: 0, x: 0.5, y: 0.35, showClock: true, showSeconds: true, showDate: true },
+  img: { scale: 1, rot: 0, x: 0, y: 0 },
+});
+
+const num = (v, d, lo, hi) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? clamp(n, lo, hi) : d;
+};
+
+/** Làm sạch mẫu thiết kế (có thể đến từ người lạ) */
+function sanitizeDesign(j) {
+  const D = defaultDesign();
+  const c = j?.clock ?? {};
+  const i = j?.img ?? {};
+  return {
+    clock: {
+      style: STYLE_KEYS.includes(c.style) ? c.style : D.clock.style,
+      color: /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color.toLowerCase() : D.clock.color,
+      scale: num(c.scale, 1, 0.5, 2.5),
+      sx: num(c.sx, 1, 0.5, 2.5),
+      sy: num(c.sy, 1, 0.5, 2.5),
+      rot: num(c.rot, 0, -180, 180),
+      x: num(c.x, 0.5, 0.05, 0.95),
+      y: num(c.y, 0.35, 0.05, 0.95),
+      showClock: c.showClock !== false,
+      showSeconds: c.showSeconds !== false,
+      showDate: c.showDate !== false,
+    },
+    img: {
+      scale: num(i.scale, 1, 1, 3),
+      rot: num(i.rot, 0, -180, 180),
+      x: num(i.x, 0, -2, 2),
+      y: num(i.y, 0, -2, 2),
+    },
+  };
+}
+
+let design = sanitizeDesign(store.get("gw_design", {}));
+const saveDesign = () => store.set("gw_design", design);
 
 /* =====================================================================
  *  Mã hóa tiêu đề / tên người đăng vào public_id (GIỐNG HỆT app Android)
@@ -71,9 +135,8 @@ function buildId(ts, loop, sound, title, author) {
 const ID_RE = /^gw_(\d+)_l([01])s([01])_(\d{3})(.*)$/;
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 
-/** Khóa duy nhất của một bài (dãy số thời gian) dùng cho "bia mộ" xóa / riêng tư */
+/** Khóa duy nhất của một bài (dãy số thời gian) dùng cho "bia mộ" và tệp mẫu thiết kế */
 const postKey = (id) => (id.match(/^gw_(?:vid_|img_)?(\d{10,})/) || [])[1] || null;
-
 const slug = (s) => foldVi(s || "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "hinh-nen";
 
 function makeItem(id, version, isVideo, isPublic, created = "") {
@@ -186,7 +249,20 @@ function uploadCloud(kind, file, publicId, tags, onProgress) {
 const uploadJSON = (publicId, tag, obj) =>
   uploadCloud("raw", new Blob([JSON.stringify(obj)], { type: "application/json" }), publicId, tag);
 
-async function createPost({ isVideo, file, audio, title, author, isPublic, loop, sound, onStage, onProgress }) {
+/** Tải mẫu thiết kế của một bài (null nếu bài không có) */
+async function fetchDesign(id) {
+  const key = postKey(id);
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://res.cloudinary.com/${CONFIG.CLOUD_NAME}/raw/upload/${CONFIG.CFG_TAG}_${key}`);
+    if (!r.ok) return null;
+    return sanitizeDesign(JSON.parse(await r.text()));
+  } catch {
+    return null;
+  }
+}
+
+async function createPost({ isVideo, file, audio, title, author, isPublic, loop, sound, design: d, onStage, onProgress }) {
   const ts = Date.now();
   const hasAudio = !isVideo && !!audio;
   const id = buildId(ts, isVideo && loop, isVideo ? sound : hasAudio, title, author);
@@ -198,7 +274,16 @@ async function createPost({ isVideo, file, audio, title, author, isPublic, loop,
   }
   onStage(isVideo ? "Đang tải video…" : "Đang tải ảnh…");
   const j = await uploadCloud(isVideo ? "video" : "image", file, id, isPublic ? CONFIG.PUBLIC_TAG : null, onProgress);
-  return makeItem(j.public_id, j.version, isVideo, isPublic, fmtDate(new Date().toISOString()));
+
+  // Mẫu thiết kế đi kèm (lỗi ở bước này không làm hỏng bài đăng)
+  let cfgOk = true;
+  try {
+    onStage("Đang lưu mẫu thiết kế…");
+    await uploadJSON(`${CONFIG.CFG_TAG}_${ts}`, CONFIG.CFG_TAG, { v: 1, ...d });
+  } catch {
+    cfgOk = false;
+  }
+  return { item: makeItem(j.public_id, j.version, isVideo, isPublic, fmtDate(new Date().toISOString())), cfgOk };
 }
 
 /** Xóa / chuyển riêng tư KHÔNG cần API secret: gửi "bia mộ" để Khám phá của mọi người ẩn bài này */
@@ -212,42 +297,78 @@ async function markPost(item, action) {
 async function sendReport(item, reason, note) {
   const ts = Date.now();
   await uploadJSON(`gw_report_${ts}`, CONFIG.REPORT_TAG, {
-    id: item.id,
-    video: item.isVideo,
-    title: item.title,
-    author: item.author,
-    reason,
-    note,
-    reporter: authorName(),
-    time: ts,
+    id: item.id, video: item.isVideo, title: item.title, author: item.author,
+    reason, note, reporter: authorName(), time: ts,
   });
 }
 
 /* =====================================================================
- *  Trạng thái
+ *  Trạng thái, tài khoản
  * ===================================================================== */
+function loadMine() {
+  return store.get("gw_mine", []).map((m) => makeItem(m.id, 0, m.isVideo, m.isPublic, m.created || ""));
+}
+const saveMine = () =>
+  store.set("gw_mine", state.mine.map((m) => ({ id: m.id, isVideo: m.isVideo, isPublic: m.isPublic, created: m.created })));
+
 const state = {
   tab: "image", // image | video | mine
   q: "",
   lists: { image: null, video: null },
   hidden: new Set(),
   reported: new Set(store.get("gw_reported", [])),
-  mine: store.get("gw_mine", []).map((m) => makeItem(m.id, 0, m.isVideo, m.isPublic, m.created || "")),
+  mine: loadMine(),
   loading: false,
   error: null,
 };
 
-const saveMine = () =>
-  store.set(
-    "gw_mine",
-    state.mine.map((m) => ({ id: m.id, isVideo: m.isVideo, isPublic: m.isPublic, created: m.created }))
-  );
-
 const user = () => store.get("gw_user", null);
-const authorName = () => user()?.name || store.get("gw_name", "") || "Khách";
+const savedName = () => String(store.get("gw_name", "") || "").trim();
+const authorName = () => user()?.name || savedName() || "Khách";
+const prefs = () => ({ sound: true, loop: true, ...store.get("gw_pref", {}) });
 
 /* =====================================================================
- *  Lưới Khám phá
+ *  Điều hướng (thanh menu)
+ * ===================================================================== */
+const ROUTES = ["studio", "explore", "mine", "app", "help", "profile"];
+
+function showPage(r) {
+  location.hash = "#/" + r;
+}
+
+function markNav(r) {
+  $$("#links a").forEach((a) => a.classList.toggle("active", a.dataset.route === r));
+}
+
+function route() {
+  const name = (location.hash.match(/^#\/(\w+)/) || [])[1];
+  const r = ROUTES.includes(name) ? name : "studio";
+  const page = r === "mine" ? "explore" : r;
+  $$(".page").forEach((p) => (p.hidden = p.dataset.page !== page));
+  markNav(r);
+  $("#links").classList.remove("open");
+  $("#burger").setAttribute("aria-expanded", "false");
+  $("#acc-menu").hidden = true;
+
+  if (r === "mine") setTab("mine");
+  else if (r === "explore") setTab(state.tab === "mine" ? "image" : state.tab);
+  if (r === "app") checkApk();
+  if (r === "profile") renderProfile();
+  if (r === "studio") requestAnimationFrame(paintAll);
+  window.scrollTo(0, 0);
+}
+
+$("#burger").addEventListener("click", () => {
+  const open = $("#links").classList.toggle("open");
+  $("#burger").setAttribute("aria-expanded", String(open));
+});
+$("#btn-upload").addEventListener("click", () => {
+  showPage("studio");
+  toast("Chọn ảnh/video của bạn, căn chỉnh rồi bấm “Đăng mẫu của tôi”");
+});
+
+/* =====================================================================
+ *  Khám phá
  * ===================================================================== */
 async function load(force = false) {
   if (state.tab === "mine") return render();
@@ -265,6 +386,12 @@ async function load(force = false) {
   }
   state.loading = false;
   render();
+}
+
+function setTab(t) {
+  state.tab = t;
+  $$("#tabs button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
+  load();
 }
 
 function visibleItems() {
@@ -341,11 +468,440 @@ function render() {
     status.textContent = state.q
       ? "Không tìm thấy bài nào"
       : mineMode
-      ? "Bạn chưa đăng gì. Bấm “＋ Đăng” để bắt đầu."
+      ? "Bạn chưa đăng gì. Vào mục Thiết kế rồi bấm “Đăng mẫu của tôi”."
       : "Chưa có gì ở đây. Hãy là người đăng đầu tiên!";
     return;
   }
   items.forEach((w) => grid.append(card(w, mineMode)));
+}
+
+$("#tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tab]");
+  if (!b) return;
+  setTab(b.dataset.tab);
+  const r = b.dataset.tab === "mine" ? "mine" : "explore";
+  history.replaceState(null, "", location.pathname + location.search + "#/" + r);
+  markNav(r);
+});
+$("#refresh").addEventListener("click", () => {
+  state.lists = { image: null, video: null };
+  load(true);
+});
+$("#q").addEventListener("input", (e) => {
+  state.q = e.target.value;
+  $("#q-clear").hidden = !state.q;
+  render();
+});
+$("#q-clear").addEventListener("click", () => {
+  $("#q").value = "";
+  state.q = "";
+  $("#q-clear").hidden = true;
+  render();
+});
+
+/* =====================================================================
+ *  Vẽ khung điện thoại (dùng chung cho khung thiết kế và bản xem trước khi đăng)
+ * ===================================================================== */
+function tickClockText(ph) {
+  const c = design.clock;
+  const d = new Date();
+  ph.querySelector(".time-display").textContent =
+    `${two(d.getHours())}:${two(d.getMinutes())}` + (c.showSeconds ? `:${two(d.getSeconds())}` : "");
+  ph.querySelector(".date-display").textContent = `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+function paintClock(ph) {
+  const cfg = design.clock;
+  const el = ph.querySelector(".clock-overlay");
+  const W = ph.clientWidth || 1;
+  el.hidden = !cfg.showClock && !cfg.showDate;
+  ph.querySelector(".time-display").hidden = !cfg.showClock;
+  ph.querySelector(".date-display").hidden = !cfg.showDate;
+  el.style.left = cfg.x * 100 + "%";
+  el.style.top = cfg.y * 100 + "%";
+  // Cỡ chữ = 10% chiều rộng khung * hệ số, giống hệt app Android
+  el.style.setProperty("--fs", W * 0.1 * cfg.scale + "px");
+  el.style.setProperty("--c", cfg.color);
+  el.style.transform = `translate(-50%, -50%) rotate(${cfg.rot}deg) scale(${cfg.sx}, ${cfg.sy})`;
+  el.className = `clock-overlay fs-${cfg.style}` + (cfg.showClock ? "" : " only-date");
+  tickClockText(ph);
+}
+
+function paintBg(ph) {
+  const el = ph.querySelector(".bg-media > img, .bg-media > video");
+  if (!el) return;
+  const i = design.img;
+  el.style.transform = `translate(${i.x * ph.clientWidth}px, ${i.y * ph.clientHeight}px) rotate(${i.rot}deg) scale(${i.scale})`;
+}
+
+function renderMedia(ph, media, opts = {}) {
+  const box = ph.querySelector(".bg-media");
+  box.replaceChildren();
+  box.classList.toggle("has", !!media);
+  ph.querySelector(".bg-empty").hidden = !!media;
+  if (!media) return;
+
+  if (media.isVideo) {
+    const v = document.createElement("video");
+    v.playsInline = true;
+    v.autoplay = true;
+    v.loop = media.loop;
+    v.muted = !!opts.forceMuted || !media.sound;
+    v.src = media.url;
+    let tries = 0;
+    v.addEventListener("error", () => {
+      // Video vừa đăng có thể còn đang được Cloudinary xử lý: thử lại thay vì để màn hình đen
+      if (media.item && tries++ < 8) {
+        setTimeout(() => {
+          v.src = media.url;
+          v.load();
+          v.play().catch(() => {});
+        }, 3000);
+      }
+    });
+    box.append(v);
+    v.play().catch(() => {
+      // Trình duyệt chặn tự phát có tiếng: tắt tiếng rồi phát
+      v.muted = true;
+      opts.onBlocked?.();
+      v.play().catch(() => {});
+    });
+  } else {
+    const img = document.createElement("img");
+    img.alt = media.item?.title || "";
+    img.src = media.url;
+    box.append(img);
+  }
+}
+
+/* =====================================================================
+ *  Thiết kế (studio)
+ * ===================================================================== */
+const phone = $("#phone");
+const studio = { media: null, edit: "clock", audio: null, screenOn: true };
+
+function paintAll() {
+  paintBg(phone);
+  paintClock(phone);
+  const styleName = CLOCK_STYLES.find((s) => s[0] === design.clock.style)?.[1] ?? "";
+  $("#sum-clock").textContent = `· ${styleName}`;
+  $("#sum-img").textContent = `· ${Math.round(design.img.scale * 100)}% · ${Math.round(design.img.rot)}°`;
+}
+
+function stopStudioAudio() {
+  if (studio.audio) {
+    studio.audio.pause();
+    studio.audio = null;
+  }
+}
+
+function startStudioAudio() {
+  stopStudioAudio();
+  const m = studio.media;
+  if (!m?.audioUrl || !m.sound || !studio.screenOn) return;
+  studio.audio = new Audio(m.audioUrl);
+  studio.audio.volume = m.volume ?? 1;
+  studio.audio.play().catch(() => {});
+}
+
+function syncMediaControls() {
+  const m = studio.media;
+  const show = !!m && (m.isVideo || !!m.audioUrl);
+  $("#acc-media").hidden = !show;
+  $("#s-note").hidden = !m?.isVideo;
+  if (!m) return;
+  $("#row-m-loop").hidden = !m.isVideo;
+  $("#row-m-vol").hidden = !m.audioUrl;
+  $("#m-loop").checked = m.loop;
+  $("#m-sound").checked = m.sound;
+  $("#m-vol").value = m.volume ?? 1;
+  $("#m-vol-out").textContent = Math.round((m.volume ?? 1) * 100) + "%";
+}
+
+function setStudioMedia(media) {
+  const old = studio.media;
+  if (old?.objectUrl && old !== media) URL.revokeObjectURL(old.objectUrl);
+  studio.media = media;
+  stopStudioAudio();
+  studio.screenOn = true;
+  $("#screen-off").classList.remove("on");
+  renderMedia(phone, media, {
+    onBlocked: () => {
+      if (studio.media) studio.media.sound = false;
+      syncMediaControls();
+    },
+  });
+  paintAll();
+  syncMediaControls();
+  if (media && !media.isVideo && media.audioUrl && media.sound) startStudioAudio();
+  store.set("gw_applied", media?.item ? { id: media.item.id, isVideo: media.isVideo } : null);
+}
+
+function mediaSeconds(file, tag) {
+  return new Promise((resolve) => {
+    const m = document.createElement(tag);
+    const url = URL.createObjectURL(file);
+    m.preload = "metadata";
+    m.onloadedmetadata = () => {
+      const d = Number.isFinite(m.duration) ? Math.round(m.duration) : null;
+      URL.revokeObjectURL(url);
+      resolve(d);
+    };
+    m.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    m.src = url;
+  });
+}
+
+async function handleStudioFile(file) {
+  if (!file) return;
+  const isVideo = file.type.startsWith("video/");
+  if (!isVideo && !file.type.startsWith("image/")) return toast("Hãy chọn một ảnh hoặc video");
+  if (isVideo) {
+    const sec = await mediaSeconds(file, "video");
+    if (sec == null) return toast("Không đọc được video này");
+    if (sec < 1 || sec > CONFIG.MAX_VIDEO_SECONDS) {
+      return toast(`Video dài ${sec}s. Chỉ nhận video từ 1 đến ${CONFIG.MAX_VIDEO_SECONDS} giây`);
+    }
+  }
+  const p = prefs();
+  const url = URL.createObjectURL(file);
+  setStudioMedia({ isVideo, file, url, objectUrl: url, loop: p.loop, sound: p.sound, volume: 1 });
+}
+
+/** Áp dụng một bài của cộng đồng vào khung thiết kế (kèm mẫu thiết kế nếu bài có) */
+async function applyToStudio(item) {
+  setStudioMedia({
+    isVideo: item.isVideo,
+    url: item.url,
+    item,
+    loop: item.loop,
+    sound: item.isVideo ? item.sound : !!item.audioUrl,
+    audioUrl: item.audioUrl,
+    volume: 1,
+  });
+  showPage("studio");
+  const d = await fetchDesign(item.id);
+  if (d && studio.media?.item?.id === item.id) {
+    design = d;
+    saveDesign();
+    syncDesignControls();
+    paintAll();
+    toast("Đã áp dụng mẫu của " + (item.author || "người đăng"));
+  } else if (!d) {
+    toast("Đã áp dụng. Bài này chưa có mẫu thiết kế nên giữ thiết kế của bạn");
+  }
+}
+
+/* ---------- Các thanh kéo / ô chọn (gắn theo data-bind) ---------- */
+const getPath = (o, p) => p.split(".").reduce((a, k) => a?.[k], o);
+const setPath = (o, p, v) => {
+  const ks = p.split(".");
+  const last = ks.pop();
+  ks.reduce((a, k) => a[k], o)[last] = v;
+};
+const fmtVal = (v, f) => (f === "deg" ? `${Math.round(v)}°` : `${Math.round(v * 100)}%`);
+
+function syncDesignControls() {
+  $$("[data-bind]").forEach((el) => {
+    const v = getPath(design, el.dataset.bind);
+    if (el.type === "checkbox") el.checked = !!v;
+    else el.value = v;
+    const out = el.closest(".slider")?.querySelector("output");
+    if (out) out.textContent = fmtVal(Number(v), el.dataset.fmt);
+  });
+}
+
+function initStudio() {
+  // Danh sách kiểu chữ
+  const sel = $("#c-style");
+  CLOCK_STYLES.forEach(([k, name]) => {
+    const o = document.createElement("option");
+    o.value = k;
+    o.textContent = name;
+    sel.append(o);
+  });
+  syncDesignControls();
+
+  $$("[data-bind]").forEach((el) => {
+    const ev = el.type === "range" || el.type === "color" ? "input" : "change";
+    el.addEventListener(ev, () => {
+      const v = el.type === "checkbox" ? el.checked : el.type === "range" ? Number(el.value) : el.value;
+      setPath(design, el.dataset.bind, v);
+      const out = el.closest(".slider")?.querySelector("output");
+      if (out) out.textContent = fmtVal(Number(v), el.dataset.fmt);
+      saveDesign();
+      paintAll();
+    });
+  });
+
+  // Xoay nhanh 90°
+  $$("[data-rot]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const p = b.dataset.rot;
+      let v = getPath(design, p) + Number(b.dataset.step);
+      if (v > 180) v -= 360;
+      if (v < -180) v += 360;
+      setPath(design, p, v);
+      saveDesign();
+      syncDesignControls();
+      paintAll();
+    })
+  );
+  $("#img-reset").addEventListener("click", () => {
+    design.img = defaultDesign().img;
+    saveDesign();
+    syncDesignControls();
+    paintAll();
+  });
+  $("#clock-reset").addEventListener("click", () => {
+    design.clock = defaultDesign().clock;
+    saveDesign();
+    syncDesignControls();
+    paintAll();
+  });
+
+  // Chế độ chỉnh: ảnh hay đồng hồ
+  const setMode = (m) => {
+    studio.edit = m;
+    $("#mode-image").classList.toggle("active", m === "image");
+    $("#mode-clock").classList.toggle("active", m === "clock");
+  };
+  $("#mode-image").addEventListener("click", () => setMode("image"));
+  $("#mode-clock").addEventListener("click", () => setMode("clock"));
+
+  // Kéo trên khung để di chuyển ảnh hoặc đồng hồ (giống app)
+  let drag = null;
+  phone.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".power")) return;
+    drag = { x: e.clientX, y: e.clientY };
+    phone.setPointerCapture(e.pointerId);
+  });
+  phone.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.x) / phone.clientWidth;
+    const dy = (e.clientY - drag.y) / phone.clientHeight;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (studio.edit === "image") {
+      design.img.x = clamp(design.img.x + dx, -2, 2);
+      design.img.y = clamp(design.img.y + dy, -2, 2);
+    } else {
+      design.clock.x = clamp(design.clock.x + dx, 0.05, 0.95);
+      design.clock.y = clamp(design.clock.y + dy, 0.05, 0.95);
+    }
+    paintAll();
+  });
+  const endDrag = () => {
+    if (drag) {
+      drag = null;
+      saveDesign();
+    }
+  };
+  phone.addEventListener("pointerup", endDrag);
+  phone.addEventListener("pointercancel", endDrag);
+
+  // Bật / tắt màn hình: ảnh động và âm thanh phát lại từ đầu, giống trên điện thoại
+  $("#btn-power").addEventListener("click", () => {
+    studio.screenOn = !studio.screenOn;
+    $("#screen-off").classList.toggle("on", !studio.screenOn);
+    const v = phone.querySelector(".bg-media video");
+    if (!studio.screenOn) {
+      v?.pause();
+      stopStudioAudio();
+    } else {
+      if (v) {
+        v.currentTime = 0;
+        v.play().catch(() => {});
+      }
+      startStudioAudio();
+    }
+  });
+
+  // Điều khiển ảnh động / âm thanh
+  $("#m-loop").addEventListener("change", () => {
+    if (!studio.media) return;
+    studio.media.loop = $("#m-loop").checked;
+    const v = phone.querySelector(".bg-media video");
+    if (v) {
+      v.loop = studio.media.loop;
+      if (v.loop && v.ended) v.play().catch(() => {});
+    }
+  });
+  $("#m-sound").addEventListener("change", () => {
+    if (!studio.media) return;
+    studio.media.sound = $("#m-sound").checked;
+    const v = phone.querySelector(".bg-media video");
+    if (v) v.muted = !studio.media.sound;
+    if (!studio.media.isVideo) {
+      if (studio.media.sound) startStudioAudio();
+      else stopStudioAudio();
+    }
+  });
+  $("#m-vol").addEventListener("input", () => {
+    if (!studio.media) return;
+    studio.media.volume = +$("#m-vol").value;
+    $("#m-vol-out").textContent = Math.round(studio.media.volume * 100) + "%";
+    if (studio.audio) studio.audio.volume = studio.media.volume;
+  });
+
+  // Nút hành động
+  $("#s-pick").addEventListener("click", () => $("#s-file").click());
+  $("#s-file").addEventListener("change", (e) => {
+    handleStudioFile(e.target.files[0]);
+    e.target.value = "";
+  });
+  $("#s-post").addEventListener("click", openPost);
+  $("#s-setwall").addEventListener("click", () => {
+    const it = studio.media?.item;
+    if (!it) {
+      toast(
+        studio.media
+          ? "Hãy bấm “Đăng mẫu” trước (có thể chọn Riêng tư) để đưa mẫu lên, rồi bấm lại nút này"
+          : "Chưa có hình nền. Hãy chọn ảnh/video của bạn hoặc áp dụng một bài từ Khám phá"
+      );
+      return;
+    }
+    openGetApp(it);
+  });
+  $("#s-download").addEventListener("click", () => {
+    const m = studio.media;
+    if (!m) return toast("Chưa có hình nền để tải");
+    const a = document.createElement("a");
+    if (m.item) {
+      a.href = m.item.download;
+    } else {
+      a.href = m.url;
+      a.download = m.file?.name || "hinh-nen";
+    }
+    a.rel = "noopener";
+    document.body.append(a);
+    a.click();
+    a.remove();
+  });
+  $("#s-reset").addEventListener("click", async () => {
+    if (!(await confirmBox("Đặt lại tất cả?", "Xóa hình nền đang chọn và đưa đồng hồ, ảnh về thiết kế mặc định."))) return;
+    design = defaultDesign();
+    saveDesign();
+    syncDesignControls();
+    setStudioMedia(null);
+  });
+
+  new ResizeObserver(paintAll).observe(phone);
+  setInterval(() => $$(".phone-frame").forEach(tickClockText), 1000);
+  paintAll();
+
+  // Khôi phục hình nền đã áp dụng lần trước
+  const a = store.get("gw_applied", null);
+  if (a && SAFE_ID.test(a.id)) {
+    const it = makeItem(a.id, 0, !!a.isVideo, true);
+    setStudioMedia({
+      isVideo: it.isVideo, url: it.url, item: it, loop: it.loop,
+      sound: it.isVideo ? it.sound : !!it.audioUrl, audioUrl: it.audioUrl, volume: 1,
+    });
+  }
 }
 
 /* =====================================================================
@@ -372,7 +928,6 @@ function buildVideo(box, w) {
   v.preload = "auto";
   v.loop = $("#sw-loop").checked;
   v.muted = !$("#sw-sound").checked;
-  v.volume = +$("#vol").value;
   v.src = w.url;
 
   const spin = document.createElement("div");
@@ -393,26 +948,24 @@ function buildVideo(box, w) {
   });
   box.append(v, spin);
   v.play().catch(() => {
-    // Trình duyệt chặn tự phát có tiếng: tắt tiếng rồi phát
     v.muted = true;
     $("#sw-sound").checked = false;
     v.play().catch(() => {});
   });
 }
 
-function applyControls() {
+function applyViewerControls() {
   const v = $("#v-media video");
-  const vol = +$("#vol").value;
   if (v) {
     v.loop = $("#sw-loop").checked;
     v.muted = !$("#sw-sound").checked;
-    v.volume = vol;
     if (v.loop && v.ended) v.play().catch(() => {});
   }
+  const vol = +$("#vol").value;
   if (audioEl) audioEl.volume = vol;
   $("#vol-pct").textContent = Math.round(vol * 100) + "%";
 }
-["#sw-loop", "#sw-sound", "#vol"].forEach((s) => $(s).addEventListener("input", applyControls));
+["#sw-loop", "#sw-sound", "#vol"].forEach((s) => $(s).addEventListener("input", applyViewerControls));
 
 $("#btn-listen").addEventListener("click", () => {
   if (audioEl) return stopAudio();
@@ -448,19 +1001,17 @@ function openViewer(w) {
     ? "ℹ️ Trên điện thoại, mỗi lần tắt rồi bật màn hình ảnh động sẽ phát lại từ đầu. Khi tắt Lặp lại, video chạy hết rồi đứng yên ở khung hình cuối."
     : w.sound
     ? "ℹ️ Âm thanh kèm ảnh phát lại từ đầu mỗi khi bật màn hình."
-    : "ℹ️ Tải ảnh về rồi đặt làm hình nền, hoặc dùng ứng dụng Android để đặt và căn chỉnh đồng hồ.";
+    : "ℹ️ Bấm Đặt làm hình nền để mở ứng dụng Android, hoặc Áp dụng vào khung thiết kế để chỉnh đồng hồ.";
 
-  // Công tắc xem thử
   $("#row-loop").hidden = !w.isVideo;
   $("#row-sound").hidden = !w.isVideo;
-  $("#row-vol").hidden = !(w.isVideo || w.audioUrl);
+  $("#row-vol").hidden = !w.audioUrl; // ảnh động chỉ cần công tắc bật/tắt tiếng, không cần thanh âm lượng
   $("#row-listen").hidden = !w.audioUrl;
   $("#sw-loop").checked = w.loop;
   $("#sw-sound").checked = w.sound;
   $("#vol").value = 1;
   $("#vol-pct").textContent = "100%";
 
-  // Phần xem
   const box = $("#v-media");
   box.replaceChildren();
   stopAudio();
@@ -475,7 +1026,6 @@ function openViewer(w) {
     box.append(img);
   }
 
-  // Tải xuống
   const dl = $("#v-download");
   dl.href = w.download;
   dl.textContent = w.isVideo ? "⬇ Tải video" : "⬇ Tải ảnh";
@@ -483,12 +1033,11 @@ function openViewer(w) {
   da.hidden = !w.audioUrl;
   if (w.audioUrl) da.href = w.audioDownload;
 
-  // Chủ bài thấy nút quản lý, người khác thấy nút báo cáo
   $("#v-owner").hidden = !isMine;
   $("#v-private").hidden = !w.isPublic;
   $("#v-report").hidden = isMine;
 
-  history.replaceState(null, "", `#post=${w.isVideo ? "video" : "image"}:${encodeURIComponent(w.id)}`);
+  history.replaceState(null, "", `?post=${w.isVideo ? "video" : "image"}:${encodeURIComponent(w.id)}${location.hash}`);
   if (!viewer.open) viewer.showModal();
 }
 
@@ -496,7 +1045,7 @@ viewer.addEventListener("close", () => {
   $("#v-media").replaceChildren();
   stopAudio();
   clearTimeout(retryTimer);
-  history.replaceState(null, "", location.pathname + location.search);
+  history.replaceState(null, "", location.pathname + location.hash);
   current = null;
 });
 viewer.addEventListener("click", (e) => {
@@ -511,6 +1060,15 @@ $("#v-copy").addEventListener("click", async () => {
   } catch {
     toast("Không chép được, hãy copy từ thanh địa chỉ");
   }
+});
+$("#v-apply").addEventListener("click", () => {
+  if (!current) return;
+  const w = current;
+  viewer.close();
+  applyToStudio(w);
+});
+$("#v-setwall").addEventListener("click", () => {
+  if (current) openGetApp(current);
 });
 
 /* ---------- Hộp xác nhận ---------- */
@@ -548,7 +1106,6 @@ async function manage(action) {
     toast(e.message || "Không thực hiện được");
   }
 }
-
 $("#v-private").addEventListener("click", async () => {
   if (await confirmBox("Chuyển sang riêng tư?", "Bài sẽ không còn hiện trong Khám phá, chỉ còn ở mục Của tôi.")) manage("priv");
 });
@@ -584,30 +1141,11 @@ $("#r-send").addEventListener("click", async () => {
 });
 
 /* =====================================================================
- *  Đăng bài
+ *  Đăng mẫu của tôi (hiện luôn mẫu thiết kế định đăng)
  * ===================================================================== */
-const up = { isVideo: false, file: null, audio: null, busy: false, previewUrl: null };
+const up = { audio: null, busy: false };
 const dlgUpload = $("#upload");
-
 const setUpErr = (m) => ($("#u-error").textContent = m);
-
-function mediaSeconds(file, tag) {
-  return new Promise((resolve) => {
-    const m = document.createElement(tag);
-    const url = URL.createObjectURL(file);
-    m.preload = "metadata";
-    m.onloadedmetadata = () => {
-      const d = Number.isFinite(m.duration) ? Math.round(m.duration) : null;
-      URL.revokeObjectURL(url);
-      resolve(d);
-    };
-    m.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-    m.src = url;
-  });
-}
 
 function syncUploadTexts() {
   const pub = $("#u-public").checked;
@@ -622,82 +1160,55 @@ function syncUploadTexts() {
 }
 
 function updateSubmit() {
-  $("#u-submit").disabled = up.busy || !up.file || !$("#u-title").value.trim();
+  const needName = !user();
+  const ok = $("#u-title").value.trim() && (!needName || $("#u-name").value.trim());
+  $("#u-submit").disabled = up.busy || !ok;
   $("#u-close").disabled = up.busy;
 }
 
-function clearPreview() {
-  if (up.previewUrl) URL.revokeObjectURL(up.previewUrl);
-  up.previewUrl = null;
-  $("#u-preview").replaceChildren();
-  $("#u-drop").classList.remove("has");
-  $("#u-drop-text").hidden = false;
-  $("#u-drop-text").textContent = up.isVideo
-    ? `Chạm hoặc kéo thả video vào đây\n(1–${CONFIG.MAX_VIDEO_SECONDS} giây)`
-    : "Chạm hoặc kéo thả ảnh vào đây";
-}
+function openPost() {
+  const m = studio.media;
+  if (!m?.file) {
+    toast("Hãy bấm “📁 Chọn ảnh / video của tôi”, căn chỉnh rồi mới đăng mẫu");
+    return;
+  }
 
-function setUploadType(isVideo) {
-  up.isVideo = isVideo;
-  up.file = null;
-  up.audio = null;
-  $("#u-type-image").classList.toggle("active", !isVideo);
-  $("#u-type-video").classList.toggle("active", isVideo);
-  $("#u-file").accept = isVideo ? "video/*" : "image/*";
-  $("#u-file").value = "";
-  $("#u-audio").value = "";
-  $("#u-audio-row").hidden = isVideo;
-  $("#u-video-rows").hidden = !isVideo;
-  $("#u-audio-name").textContent = "🎵 Thêm âm thanh (tùy chọn)";
-  $("#u-audio-clear").hidden = true;
-  setUpErr("");
-  clearPreview();
-  updateSubmit();
-}
+  // Bản xem trước: đúng khung thiết kế người dùng đã làm
+  const holder = $("#u-phone");
+  holder.replaceChildren();
+  const mini = $("#tpl-phone").content.firstElementChild.cloneNode(true);
+  holder.append(mini);
+  renderMedia(mini, m, { forceMuted: true });
 
-function openUpload(isVideo = false) {
   $("#u-title").value = "";
   $("#u-count").textContent = `0/${CONFIG.MAX_TITLE_CHARS}`;
-  $("#u-author").textContent = authorName();
+  up.audio = null;
+  $("#u-audio").value = "";
+  $("#u-audio-name").textContent = "🎵 Thêm âm thanh (tùy chọn)";
+  $("#u-audio-clear").hidden = true;
+  $("#u-audio-row").hidden = m.isVideo;
+  $("#u-video-rows").hidden = !m.isVideo;
   $("#u-public").checked = true;
-  $("#u-sound").checked = true;
-  $("#u-loop").checked = true;
+  $("#u-sound").checked = m.sound;
+  $("#u-loop").checked = m.loop;
   $("#u-progress").hidden = true;
   $("#u-stage").textContent = "";
-  syncUploadTexts();
-  setUploadType(isVideo);
-  dlgUpload.showModal();
-}
-
-async function handleFile(file) {
-  if (!file) return;
   setUpErr("");
-  if (up.isVideo) {
-    if (!file.type.startsWith("video/")) return setUpErr("Hãy chọn một tệp video");
-    const sec = await mediaSeconds(file, "video");
-    if (sec == null) return setUpErr("Không đọc được video này");
-    if (sec < 1 || sec > CONFIG.MAX_VIDEO_SECONDS) {
-      return setUpErr(`Video dài ${sec}s. Chỉ nhận video từ 1 đến ${CONFIG.MAX_VIDEO_SECONDS} giây`);
-    }
-  } else if (!file.type.startsWith("image/")) {
-    return setUpErr("Hãy chọn một tệp ảnh");
-  }
-  up.file = file;
+  syncUploadTexts();
 
-  clearPreview();
-  up.previewUrl = URL.createObjectURL(file);
-  const el = document.createElement(up.isVideo ? "video" : "img");
-  el.src = up.previewUrl;
-  if (up.isVideo) {
-    el.muted = true;
-    el.loop = true;
-    el.autoplay = true;
-    el.playsInline = true;
-  }
-  $("#u-preview").append(el);
-  $("#u-drop").classList.add("has");
-  $("#u-drop-text").hidden = true;
+  // Tên người đăng: đã đăng nhập thì khỏi nhập, chưa thì bắt nhập và lưu sẵn
+  const u = user();
+  $("#u-name-field").hidden = !!u;
+  $("#u-name-google").hidden = !u;
+  if (u) $("#u-name-google").textContent = `Đăng với tên tài khoản Google: ${u.name}`;
+  else $("#u-name").value = savedName();
+
   updateSubmit();
+  dlgUpload.showModal();
+  requestAnimationFrame(() => {
+    paintBg(mini);
+    paintClock(mini);
+  });
 }
 
 async function handleAudio(file) {
@@ -713,40 +1224,17 @@ async function handleAudio(file) {
   $("#u-audio-clear").hidden = false;
 }
 
-// Sự kiện của hộp đăng bài
-$("#btn-upload").addEventListener("click", () => openUpload(state.tab === "video"));
 $("#u-close").addEventListener("click", () => !up.busy && dlgUpload.close());
 dlgUpload.addEventListener("cancel", (e) => up.busy && e.preventDefault());
-$("#u-type-image").addEventListener("click", () => setUploadType(false));
-$("#u-type-video").addEventListener("click", () => setUploadType(true));
 $("#u-title").addEventListener("input", () => {
   $("#u-count").textContent = `${$("#u-title").value.length}/${CONFIG.MAX_TITLE_CHARS}`;
   updateSubmit();
 });
+$("#u-name").addEventListener("input", () => {
+  store.set("gw_name", $("#u-name").value.trim()); // lưu sẵn cho lần đăng sau
+  updateSubmit();
+});
 ["#u-public", "#u-sound", "#u-loop"].forEach((s) => $(s).addEventListener("change", syncUploadTexts));
-$("#u-rename").addEventListener("click", () => {
-  if (user()) return toast("Đang dùng tên tài khoản Google");
-  const n = prompt("Tên hiển thị trên bài đăng (tối đa 20 ký tự)", store.get("gw_name", ""));
-  if (n !== null) {
-    store.set("gw_name", n.trim().slice(0, 20));
-    $("#u-author").textContent = authorName();
-  }
-});
-
-const drop = $("#u-drop");
-drop.addEventListener("click", () => $("#u-file").click());
-drop.addEventListener("keydown", (e) => (e.key === "Enter" || e.key === " ") && $("#u-file").click());
-drop.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  drop.classList.add("over");
-});
-drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", (e) => {
-  e.preventDefault();
-  drop.classList.remove("over");
-  handleFile(e.dataTransfer.files[0]);
-});
-$("#u-file").addEventListener("change", (e) => handleFile(e.target.files[0]));
 $("#u-audio-btn").addEventListener("click", () => $("#u-audio").click());
 $("#u-audio").addEventListener("change", (e) => handleAudio(e.target.files[0]));
 $("#u-audio-clear").addEventListener("click", () => {
@@ -757,7 +1245,15 @@ $("#u-audio-clear").addEventListener("click", () => {
 });
 
 $("#u-submit").addEventListener("click", async () => {
-  if (up.busy || !up.file) return;
+  const m = studio.media;
+  if (up.busy || !m?.file) return;
+  const u = user();
+  const author = u ? u.name : $("#u-name").value.trim();
+  const title = $("#u-title").value.trim();
+  if (!title) return setUpErr("Hãy nhập tiêu đề");
+  if (!author) return setUpErr("Hãy nhập tên người đăng");
+  if (!u) store.set("gw_name", author);
+
   up.busy = true;
   updateSubmit();
   setUpErr("");
@@ -765,15 +1261,16 @@ $("#u-submit").addEventListener("click", async () => {
   prog.hidden = false;
   prog.value = 0;
   try {
-    const item = await createPost({
-      isVideo: up.isVideo,
-      file: up.file,
+    const { item, cfgOk } = await createPost({
+      isVideo: m.isVideo,
+      file: m.file,
       audio: up.audio,
-      title: $("#u-title").value.trim(),
-      author: authorName(),
+      title,
+      author,
       isPublic: $("#u-public").checked,
       loop: $("#u-loop").checked,
       sound: $("#u-sound").checked,
+      design: JSON.parse(JSON.stringify(design)),
       onStage: (t) => {
         $("#u-stage").textContent = t;
         prog.value = 0;
@@ -782,11 +1279,15 @@ $("#u-submit").addEventListener("click", async () => {
     });
     state.mine.push(item);
     saveMine();
-    toast(item.isPublic ? "Đã đăng lên Khám phá" : "Đã lưu ở chế độ riêng tư");
+    m.item = item; // từ giờ có thể "Đặt làm hình nền" bằng ứng dụng
+    store.set("gw_applied", { id: item.id, isVideo: item.isVideo });
+    toast(
+      (item.isPublic ? "Đã đăng lên Khám phá" : "Đã lưu ở chế độ riêng tư") +
+        (cfgOk ? "" : " (chưa lưu được mẫu thiết kế)")
+    );
     up.busy = false;
     dlgUpload.close();
     state.lists = { image: null, video: null };
-    load(true);
   } catch (e) {
     setUpErr(e.message || "Đăng thất bại");
   }
@@ -797,48 +1298,166 @@ $("#u-submit").addEventListener("click", async () => {
 });
 
 /* =====================================================================
- *  Đăng nhập Google (tùy chọn)
+ *  Đặt làm hình nền: mở ứng dụng hoặc tải ứng dụng
  * ===================================================================== */
-function renderAccount() {
-  const box = $("#account");
-  box.replaceChildren();
-  const u = user();
-  if (u) {
-    if (u.picture) {
-      const img = document.createElement("img");
-      img.alt = "";
-      img.referrerPolicy = "no-referrer";
-      img.src = u.picture;
-      box.append(img);
+const isAndroid = /Android/i.test(navigator.userAgent);
+
+function appLink(item) {
+  const kind = item.isVideo ? "video" : "image";
+  return `${CONFIG.APP_SCHEME}://open?kind=${kind}&id=${encodeURIComponent(item.id)}`;
+}
+
+/** Link intent của Android: mở app nếu đã cài, chưa cài thì chuyển về trang Tải ứng dụng */
+function intentLink(item) {
+  const kind = item.isVideo ? "video" : "image";
+  const fallback = encodeURIComponent(location.origin + location.pathname + "#/app");
+  return (
+    `intent://open?kind=${kind}&id=${encodeURIComponent(item.id)}` +
+    `#Intent;scheme=${CONFIG.APP_SCHEME};package=${CONFIG.APP_PACKAGE};` +
+    `S.browser_fallback_url=${fallback};end`
+  );
+}
+
+function openGetApp(item) {
+  $("#g-item").textContent = `Bài: ${item.title || "Không có tiêu đề"}` + (item.author ? ` · ${item.author}` : "");
+  $("#g-android").hidden = !isAndroid;
+  $("#g-other").hidden = isAndroid;
+  $("#g-open").href = intentLink(item);
+  for (const id of ["#g-apk", "#g-apk2"]) $(id).href = CONFIG.APK_URL;
+  $("#g-copy").onclick = async () => {
+    const link = `${location.origin}${location.pathname}?post=${item.isVideo ? "video" : "image"}:${encodeURIComponent(item.id)}#/explore`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast("Đã chép liên kết, hãy mở trên điện thoại");
+    } catch {
+      toast(link);
     }
-    const n = document.createElement("span");
-    n.className = "name";
-    n.textContent = u.name;
-    const out = document.createElement("button");
-    out.className = "link";
-    out.textContent = "Đăng xuất";
-    out.onclick = () => {
-      window.google?.accounts?.id?.disableAutoSelect();
-      store.set("gw_user", null);
-      renderAccount();
-    };
-    box.append(n, out);
-    return;
-  }
-  if (CONFIG.GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
-    const holder = document.createElement("div");
-    box.append(holder);
-    window.google.accounts.id.renderButton(holder, { theme: "filled_black", size: "medium", shape: "pill", text: "signin" });
-  } else {
-    const n = document.createElement("span");
-    n.className = "name dim";
-    n.textContent = authorName();
-    box.append(n);
+  };
+  $("#getapp").showModal();
+}
+$("#g-close").addEventListener("click", () => $("#getapp").close());
+
+async function checkApk() {
+  const btn = $("#apk-btn");
+  const info = $("#apk-info");
+  btn.href = CONFIG.APK_URL;
+  info.textContent = "";
+  try {
+    const r = await fetch(CONFIG.APK_URL, { method: "HEAD" });
+    if (r.ok) {
+      const len = Number(r.headers.get("content-length"));
+      if (len) info.textContent = `Dung lượng khoảng ${(len / 1048576).toFixed(1)} MB`;
+    } else {
+      info.textContent = "Chưa có file ứng dụng trên máy chủ. (Chủ trang: hãy đưa file APK vào repo, đúng tên trong config.js)";
+    }
+  } catch {
+    /* bỏ qua */
   }
 }
 
-function initGoogle() {
-  renderAccount();
+/* =====================================================================
+ *  Tài khoản, hồ sơ, đăng nhập Google
+ * ===================================================================== */
+function renderAccountButton() {
+  const u = user();
+  const btn = $("#acc-btn");
+  btn.replaceChildren();
+  const av = u?.picture ? document.createElement("img") : document.createElement("span");
+  av.className = "av";
+  if (u?.picture) {
+    av.alt = "";
+    av.referrerPolicy = "no-referrer";
+    av.src = u.picture;
+  } else {
+    av.textContent = (authorName()[0] || "?").toUpperCase();
+  }
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = authorName();
+  btn.append(av, nm);
+
+  $("#acc-name").textContent = authorName();
+  $("#acc-mail").textContent = u?.email || "Chưa đăng nhập";
+  $("#acc-signout").hidden = !u;
+}
+
+function signOut() {
+  window.google?.accounts?.id?.disableAutoSelect();
+  store.set("gw_user", null);
+  renderAccountButton();
+  renderProfile();
+  toast("Đã đăng xuất");
+}
+
+function renderProfile() {
+  const u = user();
+  $("#pf-name").textContent = authorName();
+  $("#pf-mail").textContent = u?.email || "Chưa đăng nhập";
+
+  const av = $("#pf-avatar");
+  av.replaceChildren();
+  if (u?.picture) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.src = u.picture;
+    av.append(img);
+  } else {
+    av.textContent = (authorName()[0] || "?").toUpperCase();
+  }
+
+  $("#st-all").textContent = state.mine.length;
+  $("#st-pub").textContent = state.mine.filter((m) => m.isPublic).length;
+  $("#st-priv").textContent = state.mine.filter((m) => !m.isPublic).length;
+
+  $("#pf-name-box").hidden = !!u;
+  $("#pf-name-google").hidden = !u;
+  if (u) $("#pf-name-google").textContent = `Đang dùng tên tài khoản Google: ${u.name}. Không cần nhập tên khi đăng bài.`;
+  else $("#pf-name-input").value = savedName();
+  $("#pf-signout").hidden = !u;
+
+  const g = $("#pf-google");
+  g.replaceChildren();
+  if (!u && CONFIG.GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
+    window.google.accounts.id.renderButton(g, { theme: "filled_black", size: "large", shape: "pill", text: "signin_with" });
+  }
+
+  const p = prefs();
+  $("#pref-sound").checked = p.sound;
+  $("#pref-loop").checked = p.loop;
+}
+
+function initAccount() {
+  renderAccountButton();
+  $("#acc-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const m = $("#acc-menu");
+    m.hidden = !m.hidden;
+    $("#acc-btn").setAttribute("aria-expanded", String(!m.hidden));
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".acc-wrap")) $("#acc-menu").hidden = true;
+  });
+  $("#acc-menu").addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) $("#acc-menu").hidden = true;
+  });
+  $("#acc-signout").addEventListener("click", signOut);
+  $("#pf-signout").addEventListener("click", signOut);
+
+  $("#pf-name-input").addEventListener("input", () => {
+    store.set("gw_name", $("#pf-name-input").value.trim());
+    renderAccountButton();
+    $("#pf-name").textContent = authorName();
+  });
+  $("#pref-sound").addEventListener("change", () => store.set("gw_pref", { ...prefs(), sound: $("#pref-sound").checked }));
+  $("#pref-loop").addEventListener("change", () => store.set("gw_pref", { ...prefs(), loop: $("#pref-loop").checked }));
+  $("#pf-clear").addEventListener("click", async () => {
+    if (!(await confirmBox("Xóa dữ liệu trình duyệt?", "Mẫu thiết kế, mục Của tôi, tên đã lưu và bài đã báo cáo sẽ bị xóa khỏi trình duyệt này."))) return;
+    ["gw_design", "gw_mine", "gw_name", "gw_reported", "gw_applied", "gw_pref", "gw_user"].forEach((k) => localStorage.removeItem(k));
+    location.href = location.pathname + "#/studio";
+    location.reload();
+  });
+
   if (!CONFIG.GOOGLE_CLIENT_ID) return;
   const s = document.createElement("script");
   s.src = "https://accounts.google.com/gsi/client";
@@ -851,315 +1470,26 @@ function initGoogle() {
           const p = JSON.parse(unb64(resp.credential.split(".")[1]));
           // Chỉ để hiển thị tên; chưa xác minh phía máy chủ
           store.set("gw_user", { name: p.name || p.email, email: p.email, picture: p.picture });
-          renderAccount();
+          renderAccountButton();
+          renderProfile();
           toast("Xin chào " + (p.name || p.email));
         } catch {
           toast("Đăng nhập thất bại");
         }
       },
     });
-    renderAccount();
+    renderProfile();
   };
   document.head.append(s);
 }
 
 /* =====================================================================
- *  Khung điện thoại: "Áp dụng" hình nền + đồng hồ (giống màn hình điện thoại)
- * ===================================================================== */
-const CLOCK_STYLES = [
-  ["digital", "Điện tử LED (Digital)"],
-  ["neon", "Neon phát sáng"],
-  ["cyberpunk", "Cyberpunk lỗi hình"],
-  ["retro", "Retro pixel cổ điển"],
-  ["bold", "Đậm mạnh mẽ (Bold)"],
-  ["serif", "Cổ điển (Serif)"],
-  ["serif_italic", "Serif nghiêng sang trọng"],
-  ["cursive", "Thư pháp (Cursive)"],
-  ["outline", "Chữ rỗng viền (Outline)"],
-  ["gradient", "Chuyển màu (Gradient)"],
-  ["shadow3d", "Nổi khối 3D"],
-  ["elegant", "Thanh mảnh thanh lịch"],
-];
-
-const clockCfg = {
-  x: 0.5, y: 0.35, scale: 1, color: "#ffffff", style: "digital",
-  showClock: true, showSeconds: true, showDate: true,
-  ...store.get("gw_clock", {}),
-};
-const saveClock = () => store.set("gw_clock", clockCfg);
-
-let applied = null; // bài đang áp dụng trong khung điện thoại
-let appliedAudio = null;
-let screenOn = true;
-let appliedRetry = 0;
-let appliedTimer = null;
-
-const two = (n) => String(n).padStart(2, "0");
-
-function tickClock() {
-  const d = new Date();
-  $("#t-time").textContent = `${two(d.getHours())}:${two(d.getMinutes())}` + (clockCfg.showSeconds ? `:${two(d.getSeconds())}` : "");
-  $("#t-date").textContent = `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-
-function styleClock() {
-  const c = $("#clock");
-  c.hidden = !clockCfg.showClock && !clockCfg.showDate;
-  $("#t-time").hidden = !clockCfg.showClock;
-  $("#t-date").hidden = !clockCfg.showDate;
-  c.style.left = clockCfg.x * 100 + "%";
-  c.style.top = clockCfg.y * 100 + "%";
-  // Cỡ chữ = 10% chiều rộng khung * hệ số, giống hệt app Android
-  c.style.setProperty("--fs", $("#phone").clientWidth * 0.1 * clockCfg.scale + "px");
-  c.style.setProperty("--c", clockCfg.color);
-  c.className = `clock-overlay fs-${clockCfg.style}` + (!clockCfg.showClock ? " only-date" : "");
-  $("#c-size-pct").textContent = Math.round(clockCfg.scale * 100) + "%";
-  tickClock();
-}
-
-function stopAppliedAudio() {
-  if (appliedAudio) {
-    appliedAudio.pause();
-    appliedAudio = null;
-  }
-}
-
-function startAppliedAudio() {
-  stopAppliedAudio();
-  if (!applied?.audioUrl || !$("#p-sound").checked || !screenOn) return;
-  appliedAudio = new Audio(applied.audioUrl);
-  appliedAudio.volume = +$("#p-vol").value;
-  appliedAudio.play().catch(() => {});
-}
-
-/** Công tắc Lặp lại / Âm thanh / Âm lượng của khung điện thoại có tác dụng ngay */
-function applyPhoneMedia() {
-  const v = $("#bg-media video");
-  const vol = +$("#p-vol").value;
-  if (v) {
-    v.loop = $("#p-loop").checked;
-    v.muted = !$("#p-sound").checked;
-    v.volume = vol;
-    if (v.loop && v.ended && screenOn) v.play().catch(() => {});
-  } else if (applied?.audioUrl) {
-    if ($("#p-sound").checked) {
-      if (!appliedAudio) startAppliedAudio();
-    } else {
-      stopAppliedAudio();
-    }
-  }
-  if (appliedAudio) appliedAudio.volume = vol;
-  $("#p-vol-pct").textContent = Math.round(vol * 100) + "%";
-}
-
-function applyToPhone(w, opts = {}) {
-  applied = w;
-  store.set("gw_applied", { id: w.id, isVideo: w.isVideo });
-  clearTimeout(appliedTimer);
-  appliedRetry = 0;
-  stopAppliedAudio();
-
-  const loop = opts.loop ?? w.loop;
-  const sound = opts.sound ?? (w.isVideo ? w.sound : !!w.audioUrl);
-  const volume = opts.volume ?? 1;
-
-  $("#p-media-ctl").hidden = !(w.isVideo || w.audioUrl);
-  $("#p-loop-row").hidden = !w.isVideo;
-  $("#p-loop").checked = loop;
-  $("#p-sound").checked = sound;
-  $("#p-vol").value = volume;
-  $("#p-vol-pct").textContent = Math.round(volume * 100) + "%";
-
-  $("#bg-empty").hidden = true;
-  const box = $("#bg-media");
-  box.replaceChildren();
-  screenOn = true;
-  $("#screen-off").classList.remove("on");
-
-  if (w.isVideo) {
-    const v = document.createElement("video");
-    v.playsInline = true;
-    v.autoplay = true;
-    v.loop = loop;
-    v.muted = !sound;
-    v.volume = volume;
-    v.src = w.url;
-    v.addEventListener("error", () => {
-      // Video vừa đăng có thể còn đang được Cloudinary xử lý: thử lại thay vì để màn hình đen
-      if (appliedRetry++ < 8) {
-        appliedTimer = setTimeout(() => {
-          v.src = w.url;
-          v.load();
-          v.play().catch(() => {});
-        }, 3000);
-      }
-    });
-    box.append(v);
-    v.play().catch(() => {
-      // Trình duyệt chặn tự phát có tiếng: tắt tiếng rồi phát
-      v.muted = true;
-      $("#p-sound").checked = false;
-      v.play().catch(() => {});
-    });
-  } else {
-    const img = document.createElement("img");
-    img.alt = w.title || "";
-    img.src = w.url;
-    box.append(img);
-    if (w.audioUrl && sound) startAppliedAudio();
-  }
-  styleClock();
-}
-
-function clearPhone() {
-  applied = null;
-  store.set("gw_applied", null);
-  clearTimeout(appliedTimer);
-  stopAppliedAudio();
-  $("#bg-media").replaceChildren();
-  $("#bg-empty").hidden = false;
-  $("#p-media-ctl").hidden = true;
-}
-
-function togglePower() {
-  screenOn = !screenOn;
-  $("#screen-off").classList.toggle("on", !screenOn);
-  const v = $("#bg-media video");
-  if (!screenOn) {
-    v?.pause();
-    stopAppliedAudio();
-  } else {
-    // Bật màn hình: ảnh động và âm thanh phát lại từ đầu, giống trên điện thoại
-    if (v) {
-      v.currentTime = 0;
-      v.play().catch(() => {});
-    }
-    startAppliedAudio();
-  }
-}
-
-function initPhone() {
-  // Bảng điều khiển đồng hồ
-  const sel = $("#c-style");
-  CLOCK_STYLES.forEach(([k, name]) => {
-    const o = document.createElement("option");
-    o.value = k;
-    o.textContent = name;
-    sel.append(o);
-  });
-  if (!CLOCK_STYLES.some(([k]) => k === clockCfg.style)) clockCfg.style = "digital";
-
-  $("#c-show").checked = clockCfg.showClock;
-  $("#c-sec").checked = clockCfg.showSeconds;
-  $("#c-date").checked = clockCfg.showDate;
-  sel.value = clockCfg.style;
-  $("#c-color").value = clockCfg.color;
-  $("#c-size").value = clockCfg.scale;
-
-  const bind = (id, ev, fn) =>
-    $(id).addEventListener(ev, () => {
-      fn();
-      saveClock();
-      styleClock();
-    });
-  bind("#c-show", "change", () => (clockCfg.showClock = $("#c-show").checked));
-  bind("#c-sec", "change", () => (clockCfg.showSeconds = $("#c-sec").checked));
-  bind("#c-date", "change", () => (clockCfg.showDate = $("#c-date").checked));
-  bind("#c-style", "change", () => (clockCfg.style = sel.value));
-  bind("#c-color", "input", () => (clockCfg.color = $("#c-color").value));
-  bind("#c-size", "input", () => (clockCfg.scale = +$("#c-size").value));
-  $("#c-reset").addEventListener("click", () => {
-    clockCfg.x = 0.5;
-    clockCfg.y = 0.35;
-    clockCfg.scale = 1;
-    $("#c-size").value = 1;
-    saveClock();
-    styleClock();
-  });
-
-  // Kéo đồng hồ để đổi vị trí
-  const clockEl = $("#clock");
-  let dragging = false;
-  clockEl.addEventListener("pointerdown", (e) => {
-    dragging = true;
-    clockEl.setPointerCapture(e.pointerId);
-  });
-  clockEl.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    const r = $("#phone").getBoundingClientRect();
-    clockCfg.x = Math.min(0.95, Math.max(0.05, (e.clientX - r.left) / r.width));
-    clockCfg.y = Math.min(0.95, Math.max(0.05, (e.clientY - r.top) / r.height));
-    styleClock();
-  });
-  const endDrag = () => {
-    if (dragging) {
-      dragging = false;
-      saveClock();
-    }
-  };
-  clockEl.addEventListener("pointerup", endDrag);
-  clockEl.addEventListener("pointercancel", endDrag);
-
-  // Điều khiển ảnh động / âm thanh
-  ["#p-loop", "#p-sound", "#p-vol"].forEach((s) => $(s).addEventListener("input", applyPhoneMedia));
-  $("#btn-power").addEventListener("click", togglePower);
-  $("#p-clear").addEventListener("click", () => {
-    clearPhone();
-    toast("Đã gỡ hình nền");
-  });
-
-  // Nút "Áp dụng" trong cửa sổ xem bài
-  $("#v-apply").addEventListener("click", () => {
-    if (!current) return;
-    applyToPhone(current, {
-      loop: $("#sw-loop").checked,
-      sound: current.isVideo ? $("#sw-sound").checked : !!current.audioUrl,
-      volume: +$("#vol").value,
-    });
-    viewer.close();
-    $("#phone").scrollIntoView({ behavior: "smooth", block: "center" });
-    toast("Đã áp dụng vào khung điện thoại");
-  });
-
-  new ResizeObserver(styleClock).observe($("#phone"));
-  setInterval(tickClock, 1000);
-  styleClock();
-
-  // Khôi phục hình nền đã áp dụng lần trước
-  const a = store.get("gw_applied", null);
-  if (a && SAFE_ID.test(a.id)) applyToPhone(makeItem(a.id, 0, !!a.isVideo, true));
-}
-
-/* =====================================================================
  *  Khởi động
  * ===================================================================== */
-$("#tabs").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-tab]");
-  if (!b) return;
-  state.tab = b.dataset.tab;
-  document.querySelectorAll("#tabs button[data-tab]").forEach((x) => x.classList.toggle("active", x === b));
-  load();
-});
-$("#refresh").addEventListener("click", () => {
-  state.lists = { image: null, video: null };
-  load(true);
-});
-$("#q").addEventListener("input", (e) => {
-  state.q = e.target.value;
-  $("#q-clear").hidden = !state.q;
-  render();
-});
-$("#q-clear").addEventListener("click", () => {
-  $("#q").value = "";
-  state.q = "";
-  $("#q-clear").hidden = true;
-  render();
-});
-
-async function openFromHash() {
-  const m = location.hash.match(/^#post=(image|video):(.+)$/);
+async function openFromQuery() {
+  const m = (new URLSearchParams(location.search).get("post") || "").match(/^(image|video):(.+)$/);
   if (!m) return;
-  const id = decodeURIComponent(m[2]);
+  const id = m[2];
   if (!SAFE_ID.test(id)) return;
   const mineItem = state.mine.find((x) => x.id === id);
   const key = postKey(id);
@@ -1167,14 +1497,15 @@ async function openFromHash() {
     const hidden = await listHidden().catch(() => new Set());
     if (hidden.has(key)) {
       toast("Bài đăng đã bị xóa hoặc chuyển riêng tư");
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", location.pathname + location.hash);
       return;
     }
   }
   openViewer(mineItem || makeItem(id, 0, m[1] === "video", true));
 }
 
-initPhone();
-initGoogle();
-load();
-openFromHash();
+initAccount();
+initStudio();
+window.addEventListener("hashchange", route);
+route();
+openFromQuery();
